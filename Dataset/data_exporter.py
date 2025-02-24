@@ -17,7 +17,7 @@ class DataExporter:
             (
                 self.beatmaps_file,
                 [
-                    "BeatmapID",
+                    "ID",
                     "Title",
                     "Artist",
                     "Creator",
@@ -32,11 +32,21 @@ class DataExporter:
             ),
             (
                 self.hit_objects_file,
-                ["BeatmapID", "Time", "Type", "X", "Y", "HitSound", "Extra"],
+                ["ID", "Time", "Type", "X", "Y", "HitSound", "Extra"],
             ),
             (
                 self.timing_points_file,
-                ["BeatmapID", "Offset", "BPM", "SV_Multiplier", "Inherited"],
+                [
+                    "ID",
+                    "offset",
+                    "ms_per_beat",
+                    "time_signature",
+                    "meter",
+                    "sample_set",
+                    "sample_index",
+                    "volume",
+                    "effects",
+                ],
             ),
         ]:
             if not os.path.exists(file):
@@ -44,43 +54,34 @@ class DataExporter:
                     writer = csv.writer(f)
                     writer.writerow(headers)
 
-    def write(self, data):
+    def write(self, data, id):
         hit_objects = data["hit_objects"]
         timing_points = data["timing_points"]
         metadata = data["metadata"]
         difficulty = data["difficulty"]
-        beatmap_id = metadata.get("BeatmapID", None)
-        if beatmap_id is None:
-            print("BeatmapID missing, skipping entry.")
+
+        if self.beatmap_exists(id):
+            print(f"Beatmap {id} already exists in beatmaps.csv, skipping.")
             return
 
-        if self.beatmap_exists(beatmap_id):
-            print(f"Beatmap {beatmap_id} already exists in beatmaps.csv, skipping.")
-            return
+        self.save_beatmap(id, metadata, difficulty)
+        self.save_hit_objects(id, hit_objects)
+        self.save_timing_points(id, timing_points)
 
-        self.save_beatmap(beatmap_id, metadata, difficulty)
-        self.save_hit_objects(beatmap_id, hit_objects)
-        self.save_timing_points(beatmap_id, timing_points)
-
-    def beatmap_exists(self, beatmap_id):
-        csv_file = "dataset_csv/beatmaps.csv"
-
-        if not os.path.exists(csv_file):
-            return False
-
-        with open(csv_file, "r", encoding="utf-8") as f:
+    def beatmap_exists(self, id):
+        with open(self.beatmaps_file, "r", encoding="utf-8") as f:
             reader = csv.reader(f)
             for row in reader:
-                if row and row[0] == str(beatmap_id):
+                if row and row[0] == str(id):
                     return True
         return False
 
-    def save_beatmap(self, beatmap_id, metadata, difficulty):
+    def save_beatmap(self, id, metadata, difficulty):
         with open(self.beatmaps_file, "a", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
             writer.writerow(
                 [
-                    beatmap_id,
+                    id,
                     metadata.get("Title", ""),
                     metadata.get("Artist", ""),
                     metadata.get("Creator", ""),
@@ -94,14 +95,14 @@ class DataExporter:
                 ]
             )
 
-    def save_hit_objects(self, beatmap_id, hit_objects):
+    def save_hit_objects(self, id, hit_objects):
         with open(self.hit_objects_file, "a", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
             for obj in hit_objects:
                 extra = obj.get("path", obj.get("end_time", ""))
                 writer.writerow(
                     [
-                        beatmap_id,
+                        id,
                         obj["time"],
                         obj["type"],
                         obj["x"],
@@ -111,10 +112,20 @@ class DataExporter:
                     ]
                 )
 
-    def save_timing_points(self, beatmap_id, timing_points):
+    def save_timing_points(self, id, timing_points):
         with open(self.timing_points_file, "a", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
             for tp in timing_points:
-                bpm = tp.get("bpm", "")
-                sv = tp.get("sv_multiplier", "")
-                writer.writerow([beatmap_id, tp["offset"], bpm, sv, tp["inherited"]])
+                writer.writerow(
+                    [
+                        id,
+                        tp.get("offset"),
+                        tp.get("ms_per_beat"),
+                        tp.get("time_signature"),
+                        tp.get("meter"),
+                        tp.get("sample_set"),
+                        tp.get("sample_index"),
+                        tp.get("volume"),
+                        tp.get("effects"),
+                    ]
+                )

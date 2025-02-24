@@ -85,29 +85,22 @@ class BeatmapProcessor:
                 continue
             if in_timing_points and line:
                 parts = line.split(",")
-                offset = int(parts[0])
-                ms_per_beat = float(parts[1])
-                inherited = int(parts[6])
 
-                if inherited == 1:  # BPM Change
-                    bpm = 1 / ms_per_beat * 1000 * 60
-                    timing_points.append(
-                        {
-                            "offset": offset,
-                            "bpm": bpm,
-                            "ms_per_beat": ms_per_beat,
-                            "inherited": inherited,
-                        }
-                    )
-                else:  # SV change
-                    sv_multiplier = -100 / ms_per_beat
-                    timing_points.append(
-                        {
-                            "offset": offset,
-                            "sv_multiplier": sv_multiplier,
-                            "inherited": inherited,
-                        }
-                    )
+                while len(parts) < 8:
+                    parts.append("")
+
+                timing_points.append(
+                    {
+                        "offset": parts[0],
+                        "ms_per_beat": parts[1],
+                        "time_signature": parts[2],
+                        "meter": parts[3],
+                        "sample_set": parts[4],
+                        "sample_index": parts[5],
+                        "volume": parts[6],
+                        "effects": parts[7],
+                    }
+                )
 
         return timing_points
 
