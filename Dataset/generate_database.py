@@ -20,11 +20,18 @@ def process_folder(input_folder, database_path):
             osu_files = [
                 file for file in os.listdir(entry_path) if file.endswith(".osu")
             ]
+            beatmapsetId = entry_path.split("-")[1]
+
+            audioData = None
 
             for index, osu_file in enumerate(osu_files):
-                id = entry_path.split("-")[1] + "-" + str(index)
+                id = beatmapsetId + "-" + str(index)
                 processor = BeatmapProcessor(entry_path, osu_file)
-                data_exporter.write(processor.get_data(), id)
+                data = processor.get_data()
+                audioData = data["audio"]
+                data_exporter.write_data(data, id)
+
+            data_exporter.save_audio(beatmapsetId, audioData)
 
             pbar.update(1)
 

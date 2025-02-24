@@ -1,5 +1,6 @@
 import os
 import librosa
+import subprocess
 
 
 class BeatmapProcessor:
@@ -154,7 +155,23 @@ class BeatmapProcessor:
 
         audio_file = os.path.join(self.beatmapset_folder, audio_files[0])
 
-        return librosa.load(audio_file)
+        return (librosa.load(audio_file), self.check_audio_ffmpeg(audio_file))
+
+    def check_audio_ffmpeg(self, file_path):
+        try:
+            result = subprocess.run(
+                ["ffmpeg", "-v", "error", "-i", file_path, "-f", "null", "-"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            if result.stderr:
+                print(f"Corrupt file detected: {file_path} - {result.stderr}")
+                return False
+            return True
+        except Exception as e:
+            print(f"Error running FFmpeg: {e}")
+            return False
 
     def get_data(self):
         return {
