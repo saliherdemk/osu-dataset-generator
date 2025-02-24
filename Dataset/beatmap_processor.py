@@ -1,14 +1,20 @@
 import os
+import librosa
 
 
 class BeatmapProcessor:
     def __init__(self, beatmapset_folder, osu_file):
         self.beatmapset_folder = beatmapset_folder
         self.osu_file = osu_file
-        self.hit_objects = self.parse_hit_objects()
-        self.timing_points = self.parse_timing_points()
-        self.metadata = self.parse_metadata()
-        self.difficulty = self.parse_difficulty()
+        try:
+            self.hit_objects = self.parse_hit_objects()
+            self.timing_points = self.parse_timing_points()
+            self.metadata = self.parse_metadata()
+            self.difficulty = self.parse_difficulty()
+            self.audio = self.encode_audio()
+        except Exception as e:
+            print(self.beatmapset_folder)
+            raise e
 
     def parse_hit_objects(self):
         hit_objects = []
@@ -142,10 +148,19 @@ class BeatmapProcessor:
 
         return difficulty
 
+    def encode_audio(self):
+        files = os.listdir(self.beatmapset_folder)
+        audio_files = [f for f in files if f.endswith((".mp3", ".ogg"))]
+
+        audio_file = os.path.join(self.beatmapset_folder, audio_files[0])
+
+        return librosa.load(audio_file)
+
     def get_data(self):
         return {
             "hit_objects": self.hit_objects,
             "timing_points": self.timing_points,
             "metadata": self.metadata,
             "difficulty": self.difficulty,
+            "audio": self.audio,
         }

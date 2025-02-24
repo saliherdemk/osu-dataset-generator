@@ -8,11 +8,11 @@ class DataExporter:
         self.beatmaps_file = os.path.join(dataset_folder, "beatmaps.csv")
         self.hit_objects_file = os.path.join(dataset_folder, "hit_objects.csv")
         self.timing_points_file = os.path.join(dataset_folder, "timing_points.csv")
+        self.audio_file = os.path.join(dataset_folder, "audio.csv")
 
         self.init_csv()
 
     def init_csv(self):
-        """Initialize dataset files with headers if they don't exist."""
         for file, headers in [
             (
                 self.beatmaps_file,
@@ -48,6 +48,7 @@ class DataExporter:
                     "effects",
                 ],
             ),
+            (self.audio_file, ["ID", "values", "sr"]),
         ]:
             if not os.path.exists(file):
                 with open(file, "w", newline="", encoding="utf-8") as f:
@@ -59,6 +60,7 @@ class DataExporter:
         timing_points = data["timing_points"]
         metadata = data["metadata"]
         difficulty = data["difficulty"]
+        audio = data["audio"]
 
         if self.beatmap_exists(id):
             print(f"Beatmap {id} already exists in beatmaps.csv, skipping.")
@@ -67,6 +69,7 @@ class DataExporter:
         self.save_beatmap(id, metadata, difficulty)
         self.save_hit_objects(id, hit_objects)
         self.save_timing_points(id, timing_points)
+        self.save_audio(id, audio)
 
     def beatmap_exists(self, id):
         with open(self.beatmaps_file, "r", encoding="utf-8") as f:
@@ -129,3 +132,12 @@ class DataExporter:
                         tp.get("effects"),
                     ]
                 )
+
+    def save_audio(self, id, audio):
+        with open(self.audio_file, "a", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            values, sr = audio
+
+            values_list = values.tolist()
+
+            writer.writerow([id, values_list, sr])

@@ -14,16 +14,14 @@ def process_folder(input_folder, database_path):
         if os.path.isdir(os.path.join(input_folder, entry))
     ]
 
-    with tqdm(total=len(beatmap_folders), desc="Processing beatmap folders") as pbar:
+    with tqdm(total=len(beatmap_folders), desc="Processing beatmapset folders") as pbar:
         for entry in beatmap_folders:
             entry_path = os.path.join(input_folder, entry)
             osu_files = [
                 file for file in os.listdir(entry_path) if file.endswith(".osu")
             ]
 
-            for index, osu_file in enumerate(
-                tqdm(osu_files, desc="Processing", leave=False)
-            ):
+            for index, osu_file in enumerate(osu_files):
                 id = entry_path.split("-")[1] + "-" + str(index)
                 processor = BeatmapProcessor(entry_path, osu_file)
                 data_exporter.write(processor.get_data(), id)
