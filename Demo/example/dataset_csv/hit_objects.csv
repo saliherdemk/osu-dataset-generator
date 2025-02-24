@@ -1,4 +1,4 @@
-BeatmapID,Time,Type,X,Y,HitSound,Extra
+ID,Time,Type,X,Y,HitSound,Extra
 4834691,8262,slider,96,132,0,P|149:123|203:116
 4834691,8643,slider,282,97,0,P|302:146|288:197
 4834691,9021,circle,212,230,2,
