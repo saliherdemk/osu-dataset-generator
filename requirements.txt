@@ -4,3 +4,5 @@ tqdm==4.67.1
 librosa==0.10.2.post1
 standard-aifc==3.13.0
 standard-sunau==3.13.0
+pandas==2.2.3
+

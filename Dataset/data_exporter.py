@@ -61,21 +61,9 @@ class DataExporter:
         metadata = data["metadata"]
         difficulty = data["difficulty"]
 
-        if self.beatmap_exists(id):
-            print(f"Beatmap {id} already exists in beatmaps.csv, skipping.")
-            return
-
         self.save_beatmap(id, metadata, difficulty)
         self.save_hit_objects(id, hit_objects)
         self.save_timing_points(id, timing_points)
-
-    def beatmap_exists(self, id):
-        with open(self.beatmaps_file, "r", encoding="utf-8") as f:
-            reader = csv.reader(f)
-            for row in reader:
-                if row and row[0] == str(id):
-                    return True
-        return False
 
     def save_beatmap(self, id, metadata, difficulty):
         with open(self.beatmaps_file, "a", newline="", encoding="utf-8") as f:
@@ -132,11 +120,18 @@ class DataExporter:
                 )
 
     def save_audio(self, id, audioData):
-        (audio, not_corrupted) = audioData
+        try:
+            (audio, not_corrupted) = audioData
+        except Exception:
+            audio = []
+            not_corrupted = False
+
         with open(self.audio_file, "a", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
-            values, sr = audio
+            values = ""
+            sr = ""
+            if not_corrupted:
+                values, sr = audio
+                values = values.tolist()
 
-            values_list = values.tolist()
-
-            writer.writerow([id, values_list, sr, not not_corrupted])
+            writer.writerow([id, values, sr])

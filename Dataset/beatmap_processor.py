@@ -7,15 +7,11 @@ class BeatmapProcessor:
     def __init__(self, beatmapset_folder, osu_file):
         self.beatmapset_folder = beatmapset_folder
         self.osu_file = osu_file
-        try:
-            self.hit_objects = self.parse_hit_objects()
-            self.timing_points = self.parse_timing_points()
-            self.metadata = self.parse_metadata()
-            self.difficulty = self.parse_difficulty()
-            self.audio = self.encode_audio()
-        except Exception as e:
-            print(self.beatmapset_folder)
-            raise e
+        self.hit_objects = self.parse_hit_objects()
+        self.timing_points = self.parse_timing_points()
+        self.metadata = self.parse_metadata()
+        self.difficulty = self.parse_difficulty()
+        self.audio = self.encode_audio()
 
     def parse_hit_objects(self):
         hit_objects = []
@@ -151,27 +147,14 @@ class BeatmapProcessor:
 
     def encode_audio(self):
         files = os.listdir(self.beatmapset_folder)
-        audio_files = [f for f in files if f.endswith((".mp3", ".ogg"))]
+        audio_files = [f for f in files if f.endswith(".mp3")]
 
-        audio_file = os.path.join(self.beatmapset_folder, audio_files[0])
-
-        return (librosa.load(audio_file), self.check_audio_ffmpeg(audio_file))
-
-    def check_audio_ffmpeg(self, file_path):
         try:
-            result = subprocess.run(
-                ["ffmpeg", "-v", "error", "-i", file_path, "-f", "null", "-"],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-            )
-            if result.stderr:
-                print(f"Corrupt file detected: {file_path} - {result.stderr}")
-                return False
-            return True
-        except Exception as e:
-            print(f"Error running FFmpeg: {e}")
-            return False
+            audio_file = os.path.join(self.beatmapset_folder, audio_files[0])
+
+            return (librosa.load(audio_file), True)
+        except Exception:
+            return ("", False)
 
     def get_data(self):
         return {
