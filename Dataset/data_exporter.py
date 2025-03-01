@@ -8,7 +8,6 @@ class DataExporter:
         self.beatmaps_file = os.path.join(dataset_folder, "beatmaps.csv")
         self.hit_objects_file = os.path.join(dataset_folder, "hit_objects.csv")
         self.timing_points_file = os.path.join(dataset_folder, "timing_points.csv")
-        self.audio_file = os.path.join(dataset_folder, "audio.csv")
 
         self.init_csv()
 
@@ -48,7 +47,6 @@ class DataExporter:
                     "effects",
                 ],
             ),
-            (self.audio_file, ["ID", "values", "sr", "corrupted"]),
         ]:
             if not os.path.exists(file):
                 with open(file, "w", newline="", encoding="utf-8") as f:
@@ -118,20 +116,3 @@ class DataExporter:
                         tp.get("effects"),
                     ]
                 )
-
-    def save_audio(self, id, audioData):
-        try:
-            (audio, not_corrupted) = audioData
-        except Exception:
-            audio = []
-            not_corrupted = False
-
-        with open(self.audio_file, "a", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            values = ""
-            sr = ""
-            if not_corrupted:
-                values, sr = audio
-                values = values.tolist()
-
-            writer.writerow([id, values, sr])

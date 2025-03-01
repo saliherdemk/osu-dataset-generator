@@ -1,6 +1,4 @@
 import os
-import librosa
-import subprocess
 
 
 class BeatmapProcessor:
@@ -11,7 +9,6 @@ class BeatmapProcessor:
         self.timing_points = self.parse_timing_points()
         self.metadata = self.parse_metadata()
         self.difficulty = self.parse_difficulty()
-        self.audio = self.encode_audio()
 
     def parse_hit_objects(self):
         hit_objects = []
@@ -145,22 +142,10 @@ class BeatmapProcessor:
 
         return difficulty
 
-    def encode_audio(self):
-        files = os.listdir(self.beatmapset_folder)
-        audio_files = [f for f in files if f.endswith(".mp3")]
-
-        try:
-            audio_file = os.path.join(self.beatmapset_folder, audio_files[0])
-
-            return (librosa.load(audio_file), True)
-        except Exception:
-            return ("", False)
-
     def get_data(self):
         return {
             "hit_objects": self.hit_objects,
             "timing_points": self.timing_points,
             "metadata": self.metadata,
             "difficulty": self.difficulty,
-            "audio": self.audio,
         }
