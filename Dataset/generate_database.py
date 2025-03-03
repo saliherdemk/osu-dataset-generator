@@ -32,7 +32,7 @@ def process_folder(input_folder, database_path):
             osu_files = [
                 file for file in os.listdir(entry_path) if file.endswith(".osu")
             ]
-            beatmapsetId = entry_path.split("-")[1]
+            beatmapsetId = entry_path.split("-")[-1]
 
             for index, osu_file in enumerate(osu_files):
                 id = beatmapsetId + "-" + str(index)
@@ -54,12 +54,27 @@ def process_folder(input_folder, database_path):
             audio_folder = os.path.join(database_path, "audio", entry.split("-")[1])
             os.makedirs(audio_folder, exist_ok=True)
 
-            if audio_files:
-                first_audio = audio_files[0]
-                shutil.copy2(
-                    os.path.join(entry_path, first_audio),
-                    os.path.join(audio_folder, first_audio),
-                )
+            osu_file = [
+                f for f in os.listdir(entry_path) if f.lower().endswith((".osu"))
+            ][0]
+
+            audio_files = {f.lower(): f for f in os.listdir(entry_path)}
+
+            audio_filename = ""
+
+            with open(os.path.join(entry_path, osu_file), "r", encoding="utf-8") as f:
+                lines = f.readlines()
+            for line in lines:
+                if line.startswith("AudioFilename"):
+                    audio_filename = line.split(":")[1].strip().lower()
+                    continue
+
+            audio_file = audio_files[audio_filename.lower()]
+
+            shutil.copy2(
+                os.path.join(entry_path, audio_file),
+                os.path.join(audio_folder, audio_file),
+            )
 
             pbar.update(1)
 
