@@ -5,4 +5,6 @@ librosa==0.10.2.post1
 standard-aifc==3.13.0
 standard-sunau==3.13.0
 pandas==2.2.3
+matplotlib==3.10.1
+python-dotenv-1.0.1
 

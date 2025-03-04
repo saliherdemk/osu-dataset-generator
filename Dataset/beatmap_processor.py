@@ -5,10 +5,21 @@ class BeatmapProcessor:
     def __init__(self, beatmapset_folder, osu_file):
         self.beatmapset_folder = beatmapset_folder
         self.osu_file = osu_file
-        self.hit_objects = self.parse_hit_objects()
-        self.timing_points = self.parse_timing_points()
-        self.metadata = self.parse_metadata()
-        self.difficulty = self.parse_difficulty()
+        self.is_mode_osu = self.verify_mode()
+        if self.is_mode_osu:
+            self.hit_objects = self.parse_hit_objects()
+            self.timing_points = self.parse_timing_points()
+            self.metadata = self.parse_metadata()
+            self.difficulty = self.parse_difficulty()
+
+    def verify_mode(self):
+        with open(
+            os.path.join(self.beatmapset_folder, self.osu_file), "r", encoding="utf-8"
+        ) as f:
+            lines = f.readlines()
+            for line in lines:
+                if line.startswith("Mode"):
+                    return int(line.split(":")[1]) == 0
 
     def parse_hit_objects(self):
         hit_objects = []
@@ -91,13 +102,13 @@ class BeatmapProcessor:
 
                 timing_points.append(
                     {
-                        "offset": parts[0],
-                        "ms_per_beat": parts[1],
-                        "time_signature": parts[2],
-                        "meter": parts[3],
-                        "sample_set": parts[4],
-                        "sample_index": parts[5],
-                        "volume": parts[6],
+                        "time": parts[0],
+                        "beat_length": parts[1],
+                        "meter": parts[2],
+                        "sample_set": parts[3],
+                        "sample_index": parts[4],
+                        "volume": parts[5],
+                        "uninherited": parts[6],
                         "effects": parts[7],
                     }
                 )

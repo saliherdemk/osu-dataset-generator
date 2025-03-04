@@ -25,6 +25,8 @@ def process_folder(input_folder, database_path):
         and not entry.split("-")[1] in processed
     ]
 
+    skipped_files = []
+
     with tqdm(total=len(beatmap_folders), desc="Processing beatmapset folders") as pbar:
         for entry in beatmap_folders:
             entry_path = os.path.join(input_folder, entry)
@@ -37,11 +39,17 @@ def process_folder(input_folder, database_path):
             for index, osu_file in enumerate(osu_files):
                 id = beatmapsetId + "-" + str(index)
                 processor = BeatmapProcessor(entry_path, osu_file)
+                if not processor.is_mode_osu:
+                    skipped_files.append(osu_file)
+                    continue
                 data = processor.get_data()
                 data_exporter.write_data(data, id)
 
             pbar.update(1)
+    print(skipped_files)
+    print(f"Skipped {len(skipped_files)} beatmaps that modes are not osu.")
 
+    return
     with tqdm(total=len(beatmap_folders), desc="Copying audio files") as pbar:
 
         for entry in beatmap_folders:

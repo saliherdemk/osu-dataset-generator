@@ -37,13 +37,13 @@ class DataExporter:
                 self.timing_points_file,
                 [
                     "ID",
-                    "offset",
-                    "ms_per_beat",
-                    "time_signature",
+                    "time",
+                    "beat_length",
                     "meter",
                     "sample_set",
                     "sample_index",
                     "volume",
+                    "uninherited",
                     "effects",
                 ],
             ),
@@ -106,13 +106,13 @@ class DataExporter:
                 writer.writerow(
                     [
                         id,
-                        tp.get("offset"),
-                        tp.get("ms_per_beat"),
-                        tp.get("time_signature"),
+                        tp.get("time"),
+                        tp.get("beat_length"),
                         tp.get("meter"),
                         tp.get("sample_set"),
                         tp.get("sample_index"),
                         tp.get("volume"),
+                        tp.get("uninherited"),
                         tp.get("effects"),
                     ]
                 )
