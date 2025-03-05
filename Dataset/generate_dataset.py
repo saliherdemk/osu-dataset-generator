@@ -7,16 +7,16 @@ import pandas as pd
 import shutil
 
 
-def processed_beatmaps(database_path):
-    beatmaps_path = os.path.join(database_path, "beatmaps.csv")
+def processed_beatmaps(dataset_path):
+    beatmaps_path = os.path.join(dataset_path, "beatmaps.csv")
     df = pd.read_csv(beatmaps_path)
     return set(df["ID"].astype(str).str.split("-").str[0])
 
 
-def process_folder(input_folder, database_path):
-    data_exporter = DataExporter(database_path)
+def process_folder(input_folder, dataset_path):
+    data_exporter = DataExporter(dataset_path)
 
-    processed = processed_beatmaps(database_path)
+    processed = processed_beatmaps(dataset_path)
 
     beatmap_folders = [
         entry
@@ -49,7 +49,6 @@ def process_folder(input_folder, database_path):
     print(skipped_files)
     print(f"Skipped {len(skipped_files)} beatmaps that modes are not osu.")
 
-    return
     with tqdm(total=len(beatmap_folders), desc="Copying audio files") as pbar:
 
         for entry in beatmap_folders:
@@ -59,12 +58,20 @@ def process_folder(input_folder, database_path):
                 for f in os.listdir(entry_path)
                 if f.lower().endswith((".mp3", ".ogg"))
             ]
-            audio_folder = os.path.join(database_path, "audio", entry.split("-")[1])
+            audio_folder = os.path.join(dataset_path, "audio", entry.split("-")[1])
             os.makedirs(audio_folder, exist_ok=True)
 
-            osu_file = [
-                f for f in os.listdir(entry_path) if f.lower().endswith((".osu"))
-            ][0]
+            try:
+                osu_file = [
+                    f for f in os.listdir(entry_path) if f.lower().endswith((".osu"))
+                ][0]
+            except:
+                print(
+                    "Couldn't find .osu file in",
+                    entry_path,
+                    "You may need to add manually.",
+                )
+                continue
 
             audio_files = {f.lower(): f for f in os.listdir(entry_path)}
 
@@ -89,7 +96,7 @@ def process_folder(input_folder, database_path):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Create csv database based on songs folders."
+        description="Create csv dataset based on songs folders."
     )
     parser.add_argument(
         "--input_folder",
@@ -97,14 +104,14 @@ def main():
         help="Path to the folder containing songs folders.",
     )
     parser.add_argument(
-        "--database_path",
+        "--dataset_path",
         required=True,
-        help="Database path that will create csv files.",
+        help="Dataset path that will create csv files.",
     )
 
     args = parser.parse_args()
 
-    process_folder(args.input_folder, args.database_path)
+    process_folder(args.input_folder, args.dataset_path)
 
 
 if __name__ == "__main__":
