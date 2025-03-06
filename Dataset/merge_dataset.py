@@ -15,7 +15,7 @@ def merge_datasets(dataset_one, dataset_two):
         df_two = pd.read_csv(file_two)
 
         merged_df = pd.concat([df_one, df_two], ignore_index=True)
-        merged_df.to_csv(file_one)
+        merged_df.to_csv(file_one, index=False)
 
     audio_folder_two = os.path.join(dataset_two, "audio")
 
@@ -25,7 +25,7 @@ def merge_datasets(dataset_one, dataset_two):
             os.path.join(os.path.join(dataset_one, "audio"), folder),
         )
 
-    print(dataset_two, "merged with", dataset_one)
+    print(dataset_one, "merged with", dataset_two)
 
 
 def main():
