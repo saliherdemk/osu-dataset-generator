@@ -71,6 +71,14 @@ example `hit_objects.df`
 
 You can read what are those represents from [osu wiki!](https://osu.ppy.sh/wiki/en/Client/File_formats/osu_%28file_format%29)
 
-We want to get current time attributes for each hit objects. So we need to get the latest timing point before that particular hit object and extract attributes from there. For uninherited timing points beat_length represents ms_per_beat. For inherited ones, it represents the slider multiplier. So more than one timing points may effect the same hit object. That's why we need to create columns for each possible timing points. 
+We want to get current time attributes for each hit objects. So we need to get the latest timing point before that particular hit object and extract attributes from there. For uninherited timing points beat_length represents ms_per_beat. For inherited ones, it represents the slider multiplier. So more than one timing points may effect the same hit object. That's why we need to create columns for each possible timing points.
 
+For each row, we need `beat_length`, `meter`, `slider_velocity`, `sample_set`, `volume`, `effects`
+values. You can use the `get_timing_attributes` function in `format_dataset.ipynb` for that. After that script, our dataset should look like this:
+
+| ID         | Time | Type   | X   | Y   | HitSound | Extra                   | beatmap_id | beat_length | meter | slider_velocity | sample_set | volume | effects |
+|-----------|------|--------|-----|-----|----------|-------------------------|------------|------------|-------|----------------|------------|--------|---------|
+| 1509063-0 | 3580 | slider | 135 | 26  | 0        | B\|181:10\|217:45\|...      | 1509063    | 344.827586 | 4.0   | -142.000000    | 1.0        | 60.0   | 0.0     |
+| 1509063-0 | 4270 | slider | 385 | 75  | 0        | P\|349:124\|353:174        | 1509063    | 344.827586 | 4.0   | -108.695652    | 3.0        | 60.0   | 0.0     |
+| 1509063-0 | 4615 | circle | 365 | 204 | 0        | 0                       | 1509063    | 344.827586 | 4.0   | -108.695652    | 3.0        | 60.0   | 0.0     |
 
