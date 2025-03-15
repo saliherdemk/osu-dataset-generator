@@ -2,6 +2,7 @@ import os
 import zipfile
 import argparse
 from tqdm import tqdm
+import shutil
 
 
 def extract_osz(osz_file, output_folder):
@@ -9,6 +10,7 @@ def extract_osz(osz_file, output_folder):
         with zipfile.ZipFile(osz_file, "r") as zip_ref:
             zip_ref.extractall(output_folder)
     except zipfile.BadZipFile:
+        shutil.rmtree(output_folder)
         print(osz_file, "Skipped. Corrupted .osz file")
         pass
 

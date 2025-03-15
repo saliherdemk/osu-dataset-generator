@@ -31,17 +31,9 @@ def remove_rows_by_ids(dataset_folder, ids_to_remove):
     print(f"Removed rows with IDs {ids_to_remove} from the CSV files.")
 
 
-def clear_corrupted_files(folder_path):
-    files = os.listdir(folder_path)
-    if len(files) > 1:
-        for file in files:
-            if not file.startswith("fixed."):
-                file_path = os.path.join(folder_path, file)
-                os.remove(file_path)
-
-
 def fix_bom_issue(folder_path):
     file_path = os.path.join(folder_path, os.listdir(folder_path)[0])
+    new_file_path = os.path.join(folder_path, "fixed.mp3")
     subprocess.run(
         [
             "ffmpeg",
@@ -50,14 +42,16 @@ def fix_bom_issue(folder_path):
             file_path,
             "-c",
             "copy",
-            os.path.join(folder_path, "fixed.mp3"),
+            new_file_path,
         ],
         check=True,
     )
+    os.remove(file_path)
 
 
 def fix_header_issue(folder_path):
     file_path = os.path.join(folder_path, os.listdir(folder_path)[0])
+    new_file_path = os.path.join(folder_path, "fixed.mp3")
     subprocess.run(
         [
             "ffmpeg",
@@ -68,10 +62,11 @@ def fix_header_issue(folder_path):
             "libmp3lame",
             "-b:a",
             "192k",
-            os.path.join(folder_path, "fixed.mp3"),
+            new_file_path,
         ],
         check=True,
     )
+    os.remove(file_path)
 
 
 def is_audio_corrupted(folder_path):
@@ -112,7 +107,6 @@ def fix_corrupted_audios(dataset_folder):
     for beatmap_path in tqdm(corrupted, desc="Fixing Header issue"):
         try:
             fix_header_issue(beatmap_path)
-            clear_corrupted_files(beatmap_path)
         except:
             continue
 
@@ -124,7 +118,6 @@ def fix_corrupted_audios(dataset_folder):
     for beatmap_path in tqdm(remaining, desc="Fixing BOM issue"):
         try:
             fix_bom_issue(beatmap_path)
-            clear_corrupted_files(beatmap_path)
         except:
             continue
 

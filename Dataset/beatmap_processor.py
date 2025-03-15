@@ -11,6 +11,7 @@ class BeatmapProcessor:
             self.timing_points = self.parse_timing_points()
             self.metadata = self.parse_metadata()
             self.difficulty = self.parse_difficulty()
+            self.break_points = self.parse_break_points()
 
     def verify_mode(self):
         with open(
@@ -106,7 +107,6 @@ class BeatmapProcessor:
                         "beat_length": parts[1],
                         "meter": parts[2],
                         "sample_set": parts[3],
-                        "sample_index": parts[4],
                         "volume": parts[5],
                         "uninherited": parts[6],
                         "effects": parts[7],
@@ -153,10 +153,34 @@ class BeatmapProcessor:
 
         return difficulty
 
+    def parse_break_points(self):
+        breaks = []
+        with open(
+            os.path.join(self.beatmapset_folder, self.osu_file), "r", encoding="utf-8"
+        ) as f:
+            lines = f.readlines()
+
+            in_events = False
+            in_breaks = False
+            for line in lines:
+                line = line.strip()
+                if line.startswith("["):
+                    in_events = line == "[Events]"
+                    continue
+                if in_events and line:
+                    if line.startswith("//"):
+                        in_breaks = line == "//Break Periods"
+                        continue
+                    if in_breaks:
+                        breaks.append(line)
+
+            return breaks
+
     def get_data(self):
         return {
             "hit_objects": self.hit_objects,
             "timing_points": self.timing_points,
             "metadata": self.metadata,
             "difficulty": self.difficulty,
+            "break_points": self.break_points,
         }

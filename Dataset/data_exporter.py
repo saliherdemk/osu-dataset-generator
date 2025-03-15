@@ -27,6 +27,7 @@ class DataExporter:
                     "ApproachRate",
                     "SliderMultiplier",
                     "SliderTickRate",
+                    "BreakPoints",
                 ],
             ),
             (
@@ -41,7 +42,6 @@ class DataExporter:
                     "beat_length",
                     "meter",
                     "sample_set",
-                    "sample_index",
                     "volume",
                     "uninherited",
                     "effects",
@@ -58,12 +58,13 @@ class DataExporter:
         timing_points = data["timing_points"]
         metadata = data["metadata"]
         difficulty = data["difficulty"]
+        break_points = data["break_points"]
 
-        self.save_beatmap(id, metadata, difficulty)
+        self.save_beatmap(id, metadata, difficulty, break_points)
         self.save_hit_objects(id, hit_objects)
         self.save_timing_points(id, timing_points)
 
-    def save_beatmap(self, id, metadata, difficulty):
+    def save_beatmap(self, id, metadata, difficulty, break_points):
         with open(self.beatmaps_file, "a", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
             writer.writerow(
@@ -72,13 +73,14 @@ class DataExporter:
                     metadata.get("Title", ""),
                     metadata.get("Artist", ""),
                     metadata.get("Creator", ""),
-                    metadata.get("Version", ""),
+                    str(metadata.get("Version", "")),
                     difficulty.get("HPDrainRate", ""),
                     difficulty.get("CircleSize", ""),
                     difficulty.get("OverallDifficulty", ""),
                     difficulty.get("ApproachRate", ""),
                     difficulty.get("SliderMultiplier", ""),
                     difficulty.get("SliderTickRate", ""),
+                    break_points,
                 ]
             )
 
@@ -110,7 +112,6 @@ class DataExporter:
                         tp.get("beat_length"),
                         tp.get("meter"),
                         tp.get("sample_set"),
-                        tp.get("sample_index"),
                         tp.get("volume"),
                         tp.get("uninherited"),
                         tp.get("effects"),

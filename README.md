@@ -21,8 +21,13 @@ That will generate 3 files and one folder.
 
 `beatmaps.csv`, `hit_objects.csv`, `timing_points.csv` and `audio` folder which contains only the song audio file.
 
-Filter ranked maps. To do that, you need an OAuth key from osu. Get your `client id` and your `client secret` and paste into the `.env` file which you will create in base folder. 
+Get beatmaps metadata and add to the dataset. For that, you need an OAuth key from osu. Get your `client id` and your `client secret` and paste into the `.env` file which you will create in base folder. 
+ 
+```
+python Dataset/add_beatmaps_metadata.py --dataset_folder=/home/saliherdemk/dataset
+```
 
+Filter ranked maps and remove old maps. (ie > 2010) 
 ```
 python Dataset/filter_ranked.py --dataset_folder=/home/saliherdemk/dataset
 ```
@@ -33,6 +38,17 @@ Some of the audio files might be corrupted or not ready to process. Fix those.
 python Dataset/fix_corrupted_audio.py --dataset_folder=/home/saliherdemk/dataset
 ```
 
+# Run Pipeline
+You can run all in once with `run_pipeline.sh` script.
+
+```
+chmod +x /Dataset/run_pipeline.sh
+```
+
+```
+./Dataset/run_pipeline.sh /mnt/L-HDD/songs /mnt/L-HDD/dataset /mnt/L-HDD/temp/
+```
+
 # Merge datasets
 If you collect more data later, you can merge them. After you processed your second dataset, merge them with `merge_dataset.py` script.
 
@@ -40,12 +56,9 @@ If you collect more data later, you can merge them. After you processed your sec
 python Dataset/merge_datasets.py --dataset_one=/home/saliherdemk/dataset --dataset_two=/home/saliherdemk/dataset2
 ```
 
-This will merge those datasets and overwrite to the dataset one.
+This will merge those datasets and overwrite to the dataset one. Note that it won't check for duplicated rows for now.
 
-# Cleaning & Reformatting
-
-Although the `.osu` file format backward compatibilty, since it's changing constatly some of the attributes might be missing in dataset. Also quality of maps were highly increased (imo) over time so I remove the beatmaps that is created earlier than 2010. Also I analized and filled missing cells. You can observe `data_celaning.ipynb` to see the process. Note that this is totally up to you and may depends on your dataset. That's way it's not part of the data pipeline.
-
+# Reformatting
 
 Now the hard part. Matching hit objects with timing points. 
 
