@@ -34,7 +34,7 @@ class Formatter:
             "effects",
         ]
         for col in cols:
-            df[col] = ""
+            df[col] = pd.NA
         df["unique_id"] = range(1, len(df) + 1)
         return df
 
@@ -136,13 +136,13 @@ class Formatter:
 
     def format_dataset(self):
         hit_objects_df = self.hit_objects_df
-        self.hit_objects_df = hit_objects_df[~hit_objects_df["effects"].isna()]
-        self.hit_objects_df["Time_sec"] = self.hit_objects_df["Time"] / 1000
+        not_processed = hit_objects_df[hit_objects_df["effects"].isna()].copy()
+        not_processed["Time_sec"] = not_processed["Time"] / 1000
 
-        grouped = list(self.hit_objects_df.groupby("ID"))
+        grouped = list(not_processed.groupby("ID"))
 
         start_index = 0
-        chunk_size = 10
+        chunk_size = 1000
         while start_index < len(grouped):
             end_index = start_index + chunk_size
             end_index = min(end_index, len(grouped))
@@ -167,7 +167,7 @@ class Formatter:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Merge datasets")
+    parser = argparse.ArgumentParser(description="Format dataset")
     parser.add_argument(
         "--dataset_path",
         required=True,
