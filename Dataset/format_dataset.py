@@ -17,7 +17,6 @@ class Formatter:
         self.hit_objects_df = self.get_checkpoint(dataset_path)
 
         self.audio_path = os.path.join(dataset_path, "audio")
-        self.output_file = os.path.join(dataset_path, "hit_objects_formatted.csv")
 
     def get_checkpoint(self, dataset_path):
         if os.path.exists(self.checkpoint_file):
@@ -134,6 +133,13 @@ class Formatter:
 
         return series
 
+    def safe_process(self, group):
+        try:
+            return self.process(group)
+        except Exception as e:
+            print(f"Error processing group: {set(group["ID"])}, Error: {e}")
+            return None
+
     def format_dataset(self):
         hit_objects_df = self.hit_objects_df
         not_processed = hit_objects_df[hit_objects_df["effects"].isna()].copy()
@@ -146,12 +152,14 @@ class Formatter:
         while start_index < len(grouped):
             end_index = start_index + chunk_size
             end_index = min(end_index, len(grouped))
-            results = Parallel(n_jobs=-1, backend="multiprocessing")(
-                delayed(self.process)(group)
+            results = Parallel(n_jobs=-1)(
+                delayed(self.safe_process)(group)
                 for _, group in tqdm(
                     grouped[start_index:end_index], desc="Processing Groups"
                 )
             )
+
+            results = [res for res in results if res is not None]
             result = pd.concat(results)
             self.hit_objects_df = self.hit_objects_df.set_index("unique_id")
             result = result.set_index("unique_id")
@@ -166,13 +174,29 @@ class Formatter:
             start_index = end_index
 
 
+def clear(dataset_path):
+    file_path = os.path.join(dataset_path, "hit_objects_formatted.csv")
+    df = pd.read_csv(file_path)
+    corrupted = df["MFCC"].isna()
+    num_of_corrupted = len(df[corrupted])
+    if num_of_corrupted > 0:
+        df = df[~corrupted]
+        df.to_csv(file_path, index=False)
+    print(f"Removed {num_of_corrupted} rows.")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Format dataset")
     parser.add_argument(
         "--dataset_path",
         required=True,
     )
+    parser.add_argument("--clear", action="store_true", default=False)
     args = parser.parse_args()
+
+    if args.clear:
+        clear(args.dataset_path)
+        return
 
     formatter = Formatter(args.dataset_path)
     formatter.format_dataset()
