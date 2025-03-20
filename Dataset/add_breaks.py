@@ -4,57 +4,49 @@ import pandas as pd
 from joblib import Parallel, delayed
 from tqdm import tqdm
 import librosa
+import ast
 
 
 class Formatter:
     def __init__(self, dataset_path) -> None:
-        self.beatmaps_df = pd.read_csv(os.path.join(dataset_path, "beatmaps.csv"))
-        self.audio_path = os.path.join(dataset_path, "audio")
-        self.output_file = os.path.join(dataset_path, "breaks.csv")
+        self.dataset_path = dataset_path
 
     def process(self, series):
-        print(series)
-        return
-        y, sr = librosa.load(audio_file)
+        audio_path = os.path.join(self.dataset_path, "audio")
 
-        _, beat_frames = librosa.beat.beat_track(y=y, sr=sr)
-        beat_times = librosa.frames_to_time(beat_frames, sr=sr)
+        audio_folder = os.path.join(audio_path, series["beatmap_id"].iloc[0])
+        audio_file = os.path.join(audio_folder, os.listdir(audio_folder)[0])
+
+        y, sr = librosa.load(audio_file)
         mfcc = librosa.feature.mfcc(y=y, sr=sr)
         rms_energy = librosa.feature.rms(y=y)
+        audio_features = []
+        for _, row in series.iterrows():
+            id = row["ID"]
+            break_points = ast.literal_eval(row["BreakPoints"])
+            for point in break_points:
+                _, start, end = point.split(",")
+                start_frame = librosa.time_to_frames(float(start) / 1000, sr=sr)
+                end_frame = librosa.time_to_frames(float(end) / 1000, sr=sr)
 
-        aligned_objects = []
-        matched_mfccs = []
-        matched_rms = []
-        for time in series["Time_sec"]:
-            closest_beat = min(beat_times, key=lambda x: abs(x - time))
-            aligned_objects.append(closest_beat)
+                for frame_idx in range(start_frame, end_frame):
+                    mfcc_segment = mfcc[:, frame_idx]
+                    rms_segment = rms_energy[:, frame_idx]
+                    frame_time = librosa.frames_to_time(frame_idx, sr=sr)
 
-            frame = librosa.time_to_frames(time, sr=sr)
-            matched_mfccs.append(mfcc[:, frame])
-            matched_rms.append(rms_energy[0][frame])
-        series["Aligned_Time"] = aligned_objects
-        series["MFCC"] = matched_mfccs
-        series["RMS"] = matched_rms
-
-        timing_list = Parallel(n_jobs=-1)(
-            delayed(self.get_timing_attributes)(row) for _, row in series.iterrows()
+                    audio_features.append(
+                        [
+                            id,
+                            frame_time,
+                            "break",
+                            mfcc_segment,
+                            rms_segment,
+                            id.split("-")[0],
+                        ]
+                    )
+        return pd.DataFrame(
+            audio_features, columns=["ID", "Time", "Type", "MFCC", "RMS", "beatmap_id"]
         )
-        timing_df = pd.DataFrame(timing_list).apply(pd.Series)
-
-        update_indices = series.index
-        series.loc[
-            update_indices,
-            [
-                "beat_length",
-                "meter",
-                "slider_velocity",
-                "sample_set",
-                "volume",
-                "effects",
-            ],
-        ] = timing_df.values
-
-        return series
 
     def safe_process(self, group):
         try:
@@ -64,25 +56,49 @@ class Formatter:
             return None
 
     def format_dataset(self):
-        has_break_points = self.beatmaps_df[self.beatmaps_df["BreakPoints"] != "[]"]
+        beatmaps_df = pd.read_csv(os.path.join(self.dataset_path, "beatmaps.csv"))
+
+        has_break_points = beatmaps_df[beatmaps_df["BreakPoints"] != "[]"]
         has_break_points = has_break_points[["ID", "BreakPoints"]]
 
         has_break_points["beatmap_id"] = has_break_points["ID"].str.split("-").str[0]
         grouped = has_break_points.groupby("beatmap_id")
 
-        start_index = 0
-        chunk_size = 100
-        while start_index < len(has_break_points):
-            end_index = start_index + chunk_size
-            end_index = min(end_index, len(has_break_points))
-            results = Parallel(n_jobs=-1)(
-                delayed(self.safe_process)(group)
-                for _, group in tqdm(
-                    grouped[start_index:end_index],
-                    desc="Processing Groups",
-                )
+        results = Parallel(n_jobs=-1)(
+            delayed(self.safe_process)(group)
+            for _, group in tqdm(
+                grouped,
+                desc="Processing Groups",
             )
-            break
+        )
+        results = [res for res in results if res is not None]
+        result = pd.concat(results)
+
+        output_file = os.path.join(self.dataset_path, "breaks.csv")
+        result.to_csv(output_file, index=False)
+        print("Data saved to ", output_file)
+
+    def merge_breaks(self):
+        hit_objects_path = os.path.join(self.dataset_path, "hit_objects_formatted.csv")
+        breaks_path = os.path.join(self.dataset_path, "breaks.csv")
+
+        hit_objects_df = pd.read_csv(hit_objects_path)
+        breaks_df = pd.read_csv(breaks_path)
+        last_id = hit_objects_df["unique_id"].max()
+        breaks_df["unique_id"] = range(last_id + 1, last_id + 1 + len(breaks_df))
+        breaks_df["Type"] = "break"
+        breaks_df["beatmap_id"] = breaks_df["ID"].str.split("-").str[0]
+
+        for col in hit_objects_df.columns:
+            if col not in breaks_df.columns:
+                breaks_df[col] = -1
+        merged_df = pd.concat([hit_objects_df, breaks_df], ignore_index=True)
+        merged_df = merged_df.sort_values(by="ID").reset_index(drop=True)
+        merged_df.to_csv(hit_objects_path, index=False)
+        print(
+            "breaks.csv merged with hit_objects_formatted.csv and saved as",
+            hit_objects_path,
+        )
 
 
 def main():
@@ -91,10 +107,12 @@ def main():
         "--dataset_path",
         required=True,
     )
+    parser.add_argument("--merge", action="store_true", default=False)
     args = parser.parse_args()
 
     formatter = Formatter(args.dataset_path)
-    formatter.format_dataset()
+
+    formatter.merge_breaks() if args.merge else formatter.format_dataset()
 
 
 if __name__ == "__main__":
