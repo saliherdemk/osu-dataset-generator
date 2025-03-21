@@ -1,31 +1,24 @@
 import os
 import argparse
 import pandas as pd
-import shutil
 
 
-def merge_datasets(dataset_one, dataset_two):
-    csv_files = ["beatmaps.csv", "hit_objects.csv", "timing_points.csv"]
+def merge_datasets(dataset_one, dataset_two, output_file):
 
-    for file in csv_files:
-        file_one = os.path.join(dataset_one, file)
-        file_two = os.path.join(dataset_two, file)
+    file_one = os.path.join(dataset_one, "hit_objects_formatted.csv")
+    file_two = os.path.join(dataset_two, "hit_objects_formatted.csv")
 
-        df_one = pd.read_csv(file_one)
-        df_two = pd.read_csv(file_two)
+    df_one = pd.read_csv(file_one)
+    df_two = pd.read_csv(file_two)
 
-        merged_df = pd.concat([df_one, df_two], ignore_index=True)
-        merged_df.to_csv(file_one, index=False)
+    new_rows = df_two[~df_two["ID"].isin(df_one["ID"])]
+    merged = pd.concat([df_one, new_rows], ignore_index=True)
+    merged = df_one.sort_values(by="ID").reset_index(drop=True)
+    merged["unique_id"] = range(len(df_one))
 
-    audio_folder_two = os.path.join(dataset_two, "audio")
+    merged.to_csv(output_file, index=False)
 
-    for folder in os.listdir(audio_folder_two):
-        shutil.copytree(
-            os.path.join(audio_folder_two, folder),
-            os.path.join(os.path.join(dataset_one, "audio"), folder),
-        )
-
-    print(dataset_one, "merged with", dataset_two)
+    print("Merged file saved on", output_file)
 
 
 def main():
@@ -38,10 +31,14 @@ def main():
         "--dataset_two",
         required=True,
     )
+    parser.add_argument(
+        "--output_file",
+        required=True,
+    )
 
     args = parser.parse_args()
 
-    merge_datasets(args.dataset_one, args.dataset_two)
+    merge_datasets(args.dataset_one, args.dataset_two, args.output_file)
 
 
 if __name__ == "__main__":

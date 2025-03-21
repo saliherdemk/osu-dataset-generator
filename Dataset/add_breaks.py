@@ -95,10 +95,7 @@ class Formatter:
         merged_df = pd.concat([hit_objects_df, breaks_df], ignore_index=True)
         merged_df = merged_df.sort_values(by="ID").reset_index(drop=True)
         merged_df.to_csv(hit_objects_path, index=False)
-        print(
-            "breaks.csv merged with hit_objects_formatted.csv and saved as",
-            hit_objects_path,
-        )
+        print("Merged file saved as", hit_objects_path)
 
 
 def main():

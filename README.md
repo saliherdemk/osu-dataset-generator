@@ -4,13 +4,12 @@ Download your current beatmapset using [this](https://github.com/saliherdemk/osu
 
 Use `extract_osz.py` to unzip them.
 
-Some beatmaps might not be extracted correctly. In that case you will see a warning message for that beatmapset. Extract manually and move files to the corresponding path.
 
 ```
 python Dataset/extract_osz.py --input_folder=/home/saliherdemk/songs --output_folder=/home/saliherdemk/extracted
 ```
 
-Now you have .osu file and corresponding audio file for every beatmap that you have. Use `generate_dataset.py` script to generate your dataset.
+Now you have .osu file and corresponding audio file for every beatmap that you own. Use `generate_dataset.py` script to generate your dataset.
 
 
 ```
@@ -21,7 +20,8 @@ That will generate 3 files and one folder.
 
 `beatmaps.csv`, `hit_objects.csv`, `timing_points.csv` and `audio` folder which contains only the song audio file.
 
-Get beatmaps metadata and add to the dataset. For that, you need an OAuth key from osu. Get your `client id` and your `client secret` and paste into the `.env` file which you will create in base folder. 
+Next, retrieve beatmap metadata and add it to the dataset. For this, you need an OAuth key from osu. Get your client id and client secret, then paste them into a `.env` file, which you will create in the base folder.
+
  
 ```
 python Dataset/add_beatmaps_metadata.py --dataset_folder=/home/saliherdemk/dataset
@@ -32,14 +32,14 @@ Filter ranked maps and remove old maps. (ie > 2010)
 python Dataset/filter_ranked.py --dataset_folder=/home/saliherdemk/dataset
 ```
 
-Some of the audio files might be corrupted or not ready to process. Fix those.
+Some of the audio files might be corrupted or not ready for processing. Fix those.
 
 ```
 python Dataset/fix_corrupted_audio.py --dataset_folder=/home/saliherdemk/dataset
 ```
 
 # Run Pipeline
-You can run all in once with `run_pipeline.sh` script.
+You can run everything at once using the `run_pipeline.sh` script.
 
 ```
 chmod +x /Dataset/run_pipeline.sh
@@ -49,14 +49,6 @@ chmod +x /Dataset/run_pipeline.sh
 ./Dataset/run_pipeline.sh /mnt/L-HDD/songs /mnt/L-HDD/dataset /mnt/L-HDD/temp/
 ```
 
-# Merge datasets
-If you collect more data later, you can merge them. After you processed your second dataset, merge them with `merge_dataset.py` script.
-
-```
-python Dataset/merge_datasets.py --dataset_one=/home/saliherdemk/dataset --dataset_two=/home/saliherdemk/dataset2
-```
-
-This will merge those datasets and overwrite to the dataset one. Note that it won't check for duplicated rows for now.
 
 # Reformatting
 
@@ -82,16 +74,62 @@ example `hit_objects.df`
 | 2276798-0  | 11931  | slider | 192 | 0   | 0        | P\|200:17\|207:35                       | 2276798    |
 
 
-You can read what are those represents from [osu wiki!](https://osu.ppy.sh/wiki/en/Client/File_formats/osu_%28file_format%29)
+You can read what these attributes represent on the [osu wiki!](https://osu.ppy.sh/wiki/en/Client/File_formats/osu_%28file_format%29)
 
-We want to get current time attributes for each hit objects. So we need to get the latest timing point before that particular hit object and extract attributes from there. For uninherited timing points beat_length represents ms_per_beat. For inherited ones, it represents the slider multiplier. So more than one timing points may effect the same hit object. That's why we need to create columns for each possible timing points.
+We need to get the current timing attributes for each hit object. To do this, we must find the latest timing point before the hit object and extract attributes from there. For uninherited timing points, `beat_length` represents `ms_per_beat`, whereas for inherited ones, it represents the `slider multiplier`. More than one timing point may affect the same hit object, so we need to create columns for each possible timing point.
 
 For each row, we need `beat_length`, `meter`, `slider_velocity`, `sample_set`, `volume`, `effects`
-values. You can use the `get_timing_attributes` function in `format_dataset.ipynb` for that. After that script, our dataset should look like this:
+values. Also we need the corresponding `MFCC` and `RMS` values for that time which we will extract from the audio file.
 
-| ID         | Time | Type   | X   | Y   | HitSound | Extra                   | beatmap_id | beat_length | meter | slider_velocity | sample_set | volume | effects |
-|-----------|------|--------|-----|-----|----------|-------------------------|------------|------------|-------|----------------|------------|--------|---------|
-| 1509063-0 | 3580 | slider | 135 | 26  | 0        | B\|181:10\|217:45\|...      | 1509063    | 344.827586 | 4.0   | -142.000000    | 1.0        | 60.0   | 0.0     |
-| 1509063-0 | 4270 | slider | 385 | 75  | 0        | P\|349:124\|353:174        | 1509063    | 344.827586 | 4.0   | -108.695652    | 3.0        | 60.0   | 0.0     |
-| 1509063-0 | 4615 | circle | 365 | 204 | 0        | 0                       | 1509063    | 344.827586 | 4.0   | -108.695652    | 3.0        | 60.0   | 0.0     |
+```
+python Dataset/format_dataset.py --dataset_path=/mnt/L-HDD/dataset
+```
+
+Now you should have your `hit_objects_formatted.csv` file on your dataset folder.
+
+`hit_objects_formatted.csv` should look like this:
+| unique_id  | ID | Time | Type   | X | Y | HitSound | Extra | beatmap_id | MFCC | RMS | beat_length | meter | slider_velocity | sample_set | volume | effects |
+|----|----|----|----|----|----|----|----|----|-----|----|----|----|----|----|----|----|
+| 1          | 1509063-0 | 3580 | slider | 135 | 26  | 0        | B\|181:10\|217:45\|225:69... | 1509063    | [-95.64657,... -2.9250336, -12.876349] | 0.196154251694679   | 344.827586206897     | 4     | -142                 | 1          | 60     | 0       |
+| 2          | 1509063-0 | 4270 | slider | 385 | 75  | 0        | P\|349:124\|353:174 | 1509063    | [-50.801365, ... 0.97146934, 1.8829639] | 0.187753155827522   | 344.827586206897     | 4     | -108.695652173913    | 3          | 60     | 0       |
+| 3          | 1509063-0 | 4615 | circle | 365 | 204 | 0        |   | 1509063    | [-70.5737, ... 5.5829735, 7.2142572] | 0.145843848586082   | 344.827586206897     | 4     | -108.695652173913    | 3          | 60     | 0       |
+| 4          | 1509063-0 | 4787 | circle | 365 | 204 | 0        |   | 1509063    | [-87.663124, ... 1.1762382, 0.45896247] | 0.148052349686623   | 344.827586206897     | 4     | -108.695652173913    | 3          | 60     | 0       |
+| 5          | 1509063-0 | 5132 | circle | 414 | 371 | 0        |   | 1509063    | [-108.05986, ... 4.0379977, 6.4551687] | 0.108284793794155   | 344.827586206897     | 4     | -108.695652173913    | 3          | 60     | 0       |
+
+
+Some of the beatmaps may not be processed properly. If you ensure that you try to process all of the rows, you can remove the remaining ones with the clear flag.
+
+
+```
+python Dataset/format_dataset.py --dataset_path=/mnt/L-HDD/dataset --clear
+```
+This will ensure that dataset is not contains any not-processed row.
+
+
+## Breaks
+
+Since we were working with hit objects, break periods were not included in the dataset. Process break points using `add_breaks.py`
+
+```
+python Dataset/add_breaks.py --dataset_path=/mnt/L-HDD/dataset
+```
+
+Once complete, you should have a `breaks.csv` file in your dataset folder. Merge it with the formatted hit objects file
+
+```
+python Dataset/add_breaks.py --dataset_path=/mnt/L-HDD/dataset --merge
+```
+
+This will merge `breaks.csv` with `hit_objects_formatted.csv`, overwriting the latter.
+
+# Merge datasets
+
+If you collect more data later, you can merge datasets. After processing your second dataset, merge it with `merge_datasets.py`
+
+```
+python Dataset/merge_datasets.py --dataset_one=/mnt/L-HDD/dataset1 --dataset_two=/mnt/L-HDD/dataset2 --output_file=/mnt/L-HDD/merged.csv
+```
+
+Notice that `--output_file` argument is a file path not a directory. This script assumes both dataset folders have been processed and contain a `hit_objects_formatted.csv` file. It will filter and add beatmaps from the second dataset that are not present in the first.
+
 
