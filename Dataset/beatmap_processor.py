@@ -1,3 +1,4 @@
+from operator import le
 import os
 
 
@@ -40,45 +41,36 @@ class BeatmapProcessor:
                 parts = line.split(",")
                 x, y, time, obj_type, hit_sound = map(int, parts[:5])
                 object_data = parts[5:]
+                t = "circle"
+                path = 0
+                repeat = 0
+                length = 0
 
                 if obj_type & 1:
-                    hit_objects.append(
-                        {
-                            "type": "circle",
-                            "x": x,
-                            "y": y,
-                            "time": time,
-                            "hit_sound": hit_sound,
-                        }
-                    )
+                    t = "circle"
 
                 elif obj_type & 2:
-                    slider_path = object_data[0]
-                    repeat = int(object_data[1])
-                    hit_objects.append(
-                        {
-                            "type": "slider",
-                            "x": x,
-                            "y": y,
-                            "time": time,
-                            "hit_sound": hit_sound,
-                            "path": slider_path,
-                            "repeat": repeat,
-                        }
-                    )
+                    t = "slider"
+                    path = object_data[0]
+                    repeat = object_data[1]
+                    length = object_data[2]
 
                 elif obj_type & 8:
-                    end_time = int(object_data[0])
-                    hit_objects.append(
-                        {
-                            "type": "spinner",
-                            "x": x,
-                            "y": y,
-                            "time": time,
-                            "hit_sound": hit_sound,
-                            "end_time": end_time,
-                        }
-                    )
+                    t = "spinner"
+                    path = object_data[0]
+
+                hit_objects.append(
+                    {
+                        "type": t,
+                        "x": x,
+                        "y": y,
+                        "time": time,
+                        "hit_sound": hit_sound,
+                        "path": path,
+                        "repeat": repeat,
+                        "length": length,
+                    }
+                )
 
         return hit_objects
 

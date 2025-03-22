@@ -32,7 +32,17 @@ class DataExporter:
             ),
             (
                 self.hit_objects_file,
-                ["ID", "Time", "Type", "X", "Y", "HitSound", "Extra"],
+                [
+                    "ID",
+                    "Time",
+                    "Type",
+                    "X",
+                    "Y",
+                    "HitSound",
+                    "Path",
+                    "Repeat",
+                    "Length",
+                ],
             ),
             (
                 self.timing_points_file,
@@ -88,7 +98,6 @@ class DataExporter:
         with open(self.hit_objects_file, "a", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
             for obj in hit_objects:
-                extra = obj.get("path", obj.get("end_time", ""))
                 writer.writerow(
                     [
                         id,
@@ -97,7 +106,9 @@ class DataExporter:
                         obj["x"],
                         obj["y"],
                         obj["hit_sound"],
-                        extra,
+                        obj["path"],
+                        obj["repeat"],
+                        obj["length"],
                     ]
                 )
 
