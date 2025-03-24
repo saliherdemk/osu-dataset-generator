@@ -99,19 +99,14 @@ class Formatter:
         mfcc = librosa.feature.mfcc(y=y, sr=sr)
         rms_energy = librosa.feature.rms(y=y)
 
-        aligned_objects = []
-        matched_mfccs = []
-        matched_rms = []
-        for time in series["Time_sec"]:
-            closest_beat = min(beat_times, key=lambda x: abs(x - time))
-            aligned_objects.append(closest_beat)
+        time_array = series["Time_sec"].values
+        frame_indices = librosa.time_to_frames(time_array, sr=sr)
 
-            frame = librosa.time_to_frames(time, sr=sr)
-            matched_mfccs.append(mfcc[:, frame])
-            matched_rms.append(rms_energy[0][frame])
-        series["Aligned_Time"] = aligned_objects
-        series["MFCC"] = matched_mfccs
-        series["RMS"] = matched_rms
+        series["Aligned_Time"] = [
+            min(beat_times, key=lambda x: abs(x - t)) for t in time_array
+        ]
+        series["MFCC"] = [mfcc[:, f] for f in frame_indices]
+        series["RMS"] = [rms_energy[0][f] for f in frame_indices]
 
         timing_list = Parallel(n_jobs=-1)(
             delayed(self.get_timing_attributes)(row) for _, row in series.iterrows()

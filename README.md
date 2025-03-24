@@ -122,6 +122,15 @@ python Dataset/add_breaks.py --dataset_path=/mnt/L-HDD/dataset --merge
 
 This will merge `breaks.csv` with `hit_objects_formatted.csv`, overwriting the latter.
 
+## Split MFCC and Curve Points Into Columns
+Since we stored our MFCC's and curve points as string in one cell. We need to spread across to new columns.
+
+```
+python Dataset/split_to_columns.py --input_file=/mnt/L-HDD/dataset/hit_objects_formatted.csv --output_file=/mnt/L-HDD/dataset/splitted.csv
+```
+
+Notice that both arguments take file path.
+
 # Merge datasets
 
 If you collect more data later, you can merge datasets. After processing your second dataset, merge it with `merge_datasets.py`
