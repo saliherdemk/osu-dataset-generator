@@ -22,8 +22,8 @@ class Formatter:
         rms_energy = librosa.feature.rms(y=y)
         audio_features = []
         for _, row in series.iterrows():
-            id = row["ID"]
-            break_points = ast.literal_eval(row["BreakPoints"])
+            id = row["id"]
+            break_points = ast.literal_eval(row["break_points"])
             for point in break_points:
                 _, start, end = point.split(",")
                 start_frame = librosa.time_to_frames(float(start) / 1000, sr=sr)
@@ -40,28 +40,28 @@ class Formatter:
                             frame_time,
                             "break",
                             mfcc_segment,
-                            rms_segment,
+                            rms_segment[0],
                             id.split("-")[0],
                         ]
                     )
         return pd.DataFrame(
-            audio_features, columns=["ID", "Time", "Type", "MFCC", "RMS", "beatmap_id"]
+            audio_features, columns=["id", "time", "type", "mfcc", "rms", "beatmap_id"]
         )
 
     def safe_process(self, group):
         try:
             return self.process(group)
         except Exception as e:
-            print(f"Error processing group: {set(group["ID"])}, Error: {e}")
+            print(f"Error processing group: {set(group["id"])}, Error: {e}")
             return None
 
     def format_dataset(self):
         beatmaps_df = pd.read_csv(os.path.join(self.dataset_path, "beatmaps.csv"))
 
-        has_break_points = beatmaps_df[beatmaps_df["BreakPoints"] != "[]"]
-        has_break_points = has_break_points[["ID", "BreakPoints"]]
+        has_break_points = beatmaps_df[beatmaps_df["break_points"] != "[]"]
+        has_break_points = has_break_points[["id", "break_points"]]
 
-        has_break_points["beatmap_id"] = has_break_points["ID"].str.split("-").str[0]
+        has_break_points["beatmap_id"] = has_break_points["id"].str.split("-").str[0]
         grouped = has_break_points.groupby("beatmap_id")
 
         results = Parallel(n_jobs=-1)(
@@ -86,14 +86,14 @@ class Formatter:
         breaks_df = pd.read_csv(breaks_path)
         last_id = hit_objects_df["unique_id"].max()
         breaks_df["unique_id"] = range(last_id + 1, last_id + 1 + len(breaks_df))
-        breaks_df["Type"] = "break"
-        breaks_df["beatmap_id"] = breaks_df["ID"].str.split("-").str[0]
+        breaks_df["type"] = "break"
+        breaks_df["beatmap_id"] = breaks_df["id"].str.split("-").str[0]
 
         for col in hit_objects_df.columns:
             if col not in breaks_df.columns:
-                breaks_df[col] = -1
+                breaks_df[col] = 0
         merged_df = pd.concat([hit_objects_df, breaks_df], ignore_index=True)
-        merged_df = merged_df.sort_values(by="ID").reset_index(drop=True)
+        merged_df = merged_df.sort_values(by="id").reset_index(drop=True)
         merged_df.to_csv(hit_objects_path, index=False)
         print("Merged file saved as", hit_objects_path)
 

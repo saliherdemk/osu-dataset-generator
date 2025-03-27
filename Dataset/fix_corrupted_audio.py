@@ -16,9 +16,9 @@ def remove_rows_by_ids(dataset_folder, ids_to_remove):
     hit_objects_df = pd.read_csv(hit_objects_csv)
     time_points_df = pd.read_csv(time_points_csv)
 
-    beatmaps_df["beatmap_id"] = beatmaps_df["ID"].str.split("-").str[0]
-    hit_objects_df["beatmap_id"] = hit_objects_df["ID"].str.split("-").str[0]
-    time_points_df["beatmap_id"] = time_points_df["ID"].str.split("-").str[0]
+    beatmaps_df["beatmap_id"] = beatmaps_df["id"].str.split("-").str[0]
+    hit_objects_df["beatmap_id"] = hit_objects_df["id"].str.split("-").str[0]
+    time_points_df["beatmap_id"] = time_points_df["id"].str.split("-").str[0]
 
     beatmaps_df = beatmaps_df[~beatmaps_df["beatmap_id"].isin(ids_to_remove)]
     hit_objects_df = hit_objects_df[~hit_objects_df["beatmap_id"].isin(ids_to_remove)]

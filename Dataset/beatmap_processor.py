@@ -1,4 +1,4 @@
-from operator import le
+import numpy as np
 import os
 
 
@@ -42,7 +42,8 @@ class BeatmapProcessor:
                 x, y, time, obj_type, hit_sound = map(int, parts[:5])
                 object_data = parts[5:]
                 t = "circle"
-                path = 0
+                path = ""
+                spinner_time = 0
                 repeat = 0
                 length = 0
 
@@ -57,7 +58,7 @@ class BeatmapProcessor:
 
                 elif obj_type & 8:
                     t = "spinner"
-                    path = object_data[0]
+                    spinner_time = object_data[0]
 
                 hit_objects.append(
                     {
@@ -69,6 +70,7 @@ class BeatmapProcessor:
                         "path": path,
                         "repeat": repeat,
                         "length": length,
+                        "spinner_time": spinner_time,
                     }
                 )
 

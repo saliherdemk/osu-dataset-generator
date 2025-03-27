@@ -11,9 +11,9 @@ def merge_datasets(dataset_one, dataset_two, output_file):
     df_one = pd.read_csv(file_one)
     df_two = pd.read_csv(file_two)
 
-    new_rows = df_two[~df_two["ID"].isin(df_one["ID"])]
+    new_rows = df_two[~df_two["id"].isin(df_one["ID"])]
     merged = pd.concat([df_one, new_rows], ignore_index=True)
-    merged = merged.sort_values(by="ID").reset_index(drop=True)
+    merged = merged.sort_values(by="id").reset_index(drop=True)
     merged["unique_id"] = range(len(merged))
 
     merged.to_csv(output_file, index=False)

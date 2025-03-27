@@ -10,7 +10,7 @@ import shutil
 def processed_beatmaps(dataset_path):
     beatmaps_path = os.path.join(dataset_path, "beatmaps.csv")
     df = pd.read_csv(beatmaps_path)
-    return set(df["ID"].astype(str).str.split("-").str[0])
+    return set(df["id"].astype(str).str.split("-").str[0])
 
 
 def process_folder(input_folder, dataset_path):

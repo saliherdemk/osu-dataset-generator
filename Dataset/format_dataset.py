@@ -1,6 +1,7 @@
 import os
 import argparse
 import pandas as pd
+import numpy as np
 from joblib import Parallel, delayed
 from tqdm import tqdm
 import librosa
@@ -23,8 +24,8 @@ class Formatter:
             return pd.read_csv(self.checkpoint_file)
         df = pd.read_csv(os.path.join(dataset_path, "hit_objects.csv"))
         cols = [
-            "MFCC",
-            "RMS",
+            "mfcc",
+            "rms",
             "beat_length",
             "meter",
             "slider_velocity",
@@ -37,57 +38,84 @@ class Formatter:
         df["unique_id"] = range(1, len(df) + 1)
         return df
 
-    def get_timing_attributes(self, row):
-        beatmap_id = row["ID"]
-        target_time = row["Time"]
-        beatmaps_df: pd.DataFrame = self.beatmaps_df
-        time_points_df: pd.DataFrame = self.time_points_df
-        base_velocity = float(
-            beatmaps_df.loc[beatmaps_df["ID"] == beatmap_id, "SliderMultiplier"].iloc[0]
+    def get_timing_attributes(self, series):
+        beatmap_ids = series["id"].values
+        target_times = series["time"].values
+        beatmaps_df = self.beatmaps_df
+        time_points_df = self.time_points_df
+
+        base_velocities = (
+            beatmaps_df.set_index("id")
+            .loc[beatmap_ids, "slider_multiplier"]
+            .values.astype(float)
         )
-        beatmap_time_points = time_points_df[time_points_df["ID"] == beatmap_id]
 
-        df_filtered = beatmap_time_points[beatmap_time_points["time"] <= target_time]
+        grouped_time_points = time_points_df.groupby("id")
 
-        latest_uninherited = df_filtered[df_filtered["uninherited"] == 1.0]
-        if not latest_uninherited.empty:
-            latest_uninherited = latest_uninherited.loc[
-                latest_uninherited["time"].idxmax()
+        results = []
+        for beatmap_id, target_time, base_velocity in zip(
+            beatmap_ids, target_times, base_velocities
+        ):
+            beatmap_time_points = grouped_time_points.get_group(beatmap_id)
+            df_filtered = beatmap_time_points[
+                beatmap_time_points["time"] <= target_time
             ]
-        else:
-            first_uninherited = beatmap_time_points[
-                beatmap_time_points["uninherited"] == 1.0
-            ]
-            latest_uninherited = first_uninherited.iloc[0]
 
-        latest_inherited = df_filtered[df_filtered["uninherited"] == 0.0]
-        latest_inherited = (
-            latest_inherited.loc[latest_inherited["time"].idxmax()]
-            if not latest_inherited.empty
-            else None
-        )
+            latest_uninherited = df_filtered[df_filtered["uninherited"] == 1.0]
+            if not latest_uninherited.empty:
+                latest_uninherited = latest_uninherited.loc[
+                    latest_uninherited["time"].idxmax()
+                ]
+            else:
+                first_uninherited = beatmap_time_points[
+                    beatmap_time_points["uninherited"] == 1.0
+                ]
+                if first_uninherited.empty:
+                    results.append(
+                        {
+                            "beat_length": np.nan,
+                            "meter": np.nan,
+                            "slider_velocity": np.nan,
+                            "sample_set": np.nan,
+                            "volume": np.nan,
+                            "effects": np.nan,
+                        }
+                    )
+                    continue
+                latest_uninherited = first_uninherited.iloc[0]
 
-        beat_length = latest_uninherited["beat_length"]
-        meter = latest_uninherited["meter"]
-        slider_velocity = (
-            latest_inherited["beat_length"]
-            if latest_inherited is not None
-            else -100 * base_velocity
-        )
-        sample_set = (
-            latest_inherited["sample_set"] if latest_inherited is not None else 1
-        )
-        volume = latest_inherited["volume"] if latest_inherited is not None else 60
-        effects = latest_inherited["effects"] if latest_inherited is not None else 0
+            latest_inherited = df_filtered[df_filtered["uninherited"] == 0.0]
+            latest_inherited = (
+                latest_inherited.loc[latest_inherited["time"].idxmax()]
+                if not latest_inherited.empty
+                else None
+            )
 
-        return {
-            "beat_length": beat_length,
-            "meter": meter,
-            "slider_velocity": slider_velocity,
-            "sample_set": sample_set,
-            "volume": volume,
-            "effects": effects,
-        }
+            beat_length = latest_uninherited["beat_length"]
+            meter = latest_uninherited["meter"]
+            slider_velocity = (
+                latest_inherited["beat_length"]
+                if latest_inherited is not None
+                else -100 * base_velocity
+            )
+            sample_set = (
+                latest_inherited["sample_set"] if latest_inherited is not None else 1
+            )
+            volume = latest_inherited["volume"] if latest_inherited is not None else 60
+            effects = latest_inherited["effects"] if latest_inherited is not None else 0
+
+            results.append(
+                {
+                    "beat_length": beat_length,
+                    "meter": meter,
+                    "slider_velocity": slider_velocity,
+                    "sample_set": sample_set,
+                    "volume": volume,
+                    "effects": effects,
+                }
+            )
+
+        return pd.DataFrame(results)
 
     def process(self, series):
         audio_folder = os.path.join(self.audio_path, str(series["beatmap_id"].iloc[0]))
@@ -99,19 +127,16 @@ class Formatter:
         mfcc = librosa.feature.mfcc(y=y, sr=sr)
         rms_energy = librosa.feature.rms(y=y)
 
-        time_array = series["Time_sec"].values
+        time_array = series["time_sec"].values
         frame_indices = librosa.time_to_frames(time_array, sr=sr)
 
-        series["Aligned_Time"] = [
+        series["aligned_time"] = [
             min(beat_times, key=lambda x: abs(x - t)) for t in time_array
         ]
-        series["MFCC"] = [mfcc[:, f] for f in frame_indices]
-        series["RMS"] = [rms_energy[0][f] for f in frame_indices]
+        series["mfcc"] = [mfcc[:, f] for f in frame_indices]
+        series["rms"] = [rms_energy[0][f] for f in frame_indices]
 
-        timing_list = Parallel(n_jobs=-1)(
-            delayed(self.get_timing_attributes)(row) for _, row in series.iterrows()
-        )
-        timing_df = pd.DataFrame(timing_list).apply(pd.Series)
+        timing_df = self.get_timing_attributes(series)
 
         update_indices = series.index
         series.loc[
@@ -132,15 +157,15 @@ class Formatter:
         try:
             return self.process(group)
         except Exception as e:
-            print(f"Error processing group: {set(group["ID"])}, Error: {e}")
+            print(f"Error processing group: {set(group["id"])}, Error: {e}")
             return None
 
     def format_dataset(self):
         hit_objects_df = self.hit_objects_df
         not_processed = hit_objects_df[hit_objects_df["effects"].isna()].copy()
-        not_processed["Time_sec"] = not_processed["Time"] / 1000
+        not_processed["time_sec"] = not_processed["time"] / 1000
 
-        grouped = list(not_processed.groupby("ID"))
+        grouped = list(not_processed.groupby("id"))
 
         start_index = 0
         chunk_size = 1000
@@ -172,7 +197,7 @@ class Formatter:
 def clear(dataset_path):
     file_path = os.path.join(dataset_path, "hit_objects_formatted.csv")
     df = pd.read_csv(file_path)
-    corrupted = df["MFCC"].isna()
+    corrupted = df["mfcc"].isna()
     num_of_corrupted = len(df[corrupted])
     if num_of_corrupted > 0:
         df = df[~corrupted]

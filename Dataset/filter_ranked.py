@@ -19,10 +19,10 @@ def filter_ranked_maps(dataset_folder):
     ]
 
     filtered_beatmaps_df = beatmaps_df[beatmaps_df["ranked_date"] > "2011-01-01"]
-    filtered_ids = filtered_beatmaps_df["ID"]
+    filtered_ids = filtered_beatmaps_df["id"]
 
-    filtered_hit_objects_df = hit_objects_df[hit_objects_df["ID"].isin(filtered_ids)]
-    filtered_time_points_df = time_points_df[time_points_df["ID"].isin(filtered_ids)]
+    filtered_hit_objects_df = hit_objects_df[hit_objects_df["id"].isin(filtered_ids)]
+    filtered_time_points_df = time_points_df[time_points_df["id"].isin(filtered_ids)]
 
     filtered_beatmaps_df.to_csv(
         os.path.join(dataset_folder, "beatmaps.csv"), index=False

@@ -50,7 +50,7 @@ def add_metadata(dataset_folder):
     beatmaps_csv = os.path.join(dataset_folder, "beatmaps.csv")
     beatmaps_df = pd.read_csv(beatmaps_csv, keep_default_na=False)
 
-    beatmapset_ids = set(beatmaps_df["ID"].str.split("-").str[0])
+    beatmapset_ids = set(beatmaps_df["id"].str.split("-").str[0])
 
     access_token = get_access_token()
 
@@ -60,8 +60,8 @@ def add_metadata(dataset_folder):
         time.sleep(0.2)
 
     def fill_metadatas(row):
-        beatmapset_id = row["ID"].split("-")[0]
-        version = row["Version"]
+        beatmapset_id = row["id"].split("-")[0]
+        version = row["version"]
 
         (status, ranked_date, beatmaps) = metadatas[beatmapset_id]
         row["status"] = status
