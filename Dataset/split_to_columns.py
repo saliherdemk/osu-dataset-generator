@@ -1,4 +1,3 @@
-import os
 import argparse
 import pandas as pd
 import numpy as np
@@ -30,7 +29,9 @@ def parse_path(row):
 tqdm.pandas()
 
 
-def parse_splitted(df, max_point_num):
+def parse_splitted(df):
+    max_point_num = df["path"].apply(lambda x: len(x)).max() * 2
+
     padded_paths = []
 
     for _, row in tqdm(df.iterrows(), total=len(df)):
@@ -40,10 +41,12 @@ def parse_splitted(df, max_point_num):
             flattened = np.array([])
 
         padded = np.pad(
-            flattened[:max_point_num],
-            (0, max_point_num - min(len(flattened), max_point_num)),
+            flattened,
+            (0, max_point_num - len(flattened)),
             mode="constant",
+            constant_values=0,
         )
+
         padded_paths.append(padded)
 
     column_names = [f"path_{i+1}" for i in range(max_point_num)]
@@ -71,8 +74,8 @@ def split_to_columns(input_file, output_file, chunk_size=10000):
         chunk.drop(columns="mfcc", axis=1, inplace=True)
 
         chunk = chunk.apply(parse_path, axis=1)
-        max_point_num = chunk["path"].apply(lambda x: len(x)).max()
-        chunk = parse_splitted(chunk, max_point_num)
+        chunk = chunk[chunk["path"].apply(lambda x: len(x) <= 25)]
+        chunk = parse_splitted(chunk)
         chunk.drop(columns=["path"], axis=1, inplace=True)
 
         mode = "w" if first_chunk else "a"
@@ -89,10 +92,10 @@ def fix(input_file):
         reader = csv.reader(f, delimiter=",")
         rows = list(reader)
 
-    max_columns = max(len(row) for row in rows)
+    max_columns = max(len(row) for row in rows) - 38
     last_path = int(rows[0][-1].split("_")[1])
 
-    headers = rows[0] + [f"path_{i}" for i in range(last_path, max_columns)]
+    headers = rows[0] + [f"path_{i}" for i in range(last_path + 1, max_columns)]
     rows[0] = headers
 
     with open(input_file, "w", newline="") as f:
