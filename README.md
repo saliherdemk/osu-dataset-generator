@@ -131,6 +131,14 @@ python Dataset/split_to_columns.py --input_file=/mnt/L-HDD/dataset/hit_objects_f
 
 Notice that both arguments take file path.
 
+## Normalize Dataset
+
+```
+python Dataset/normalize.py --input_file=/mnt/L-HDD/dataset/splitted.csv --output_file=/mnt/L-HDD/dataset/normalized.csv
+```
+
+You can find out more about normalization in `notebooks/normalize.ipynb` 
+
 # Merge datasets
 
 If you collect more data later, you can merge datasets. After processing your second dataset, merge it with `merge_datasets.py`
