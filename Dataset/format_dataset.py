@@ -166,6 +166,7 @@ class Formatter:
         not_processed["time_sec"] = not_processed["time"] / 1000
 
         grouped = list(not_processed.groupby("id"))
+        print(len(grouped), "group remaining")
 
         start_index = 0
         chunk_size = 1000
