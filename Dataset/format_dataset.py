@@ -122,17 +122,12 @@ class Formatter:
         audio_file = os.path.join(audio_folder, os.listdir(audio_folder)[0])
         y, sr = librosa.load(audio_file)
 
-        _, beat_frames = librosa.beat.beat_track(y=y, sr=sr)
-        beat_times = librosa.frames_to_time(beat_frames, sr=sr)
         mfcc = librosa.feature.mfcc(y=y, sr=sr)
         rms_energy = librosa.feature.rms(y=y)
 
         time_array = series["time_sec"].values
         frame_indices = librosa.time_to_frames(time_array, sr=sr)
 
-        series["aligned_time"] = [
-            min(beat_times, key=lambda x: abs(x - t)) for t in time_array
-        ]
         series["mfcc"] = [mfcc[:, f] for f in frame_indices]
         series["rms"] = [rms_energy[0][f] for f in frame_indices]
 

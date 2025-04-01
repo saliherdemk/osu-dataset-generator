@@ -74,7 +74,9 @@ def split_to_columns(input_file, output_file, chunk_size=10000):
         chunk.drop(columns="mfcc", axis=1, inplace=True)
 
         chunk = chunk.apply(parse_path, axis=1)
-        chunk = chunk[chunk["path"].apply(lambda x: len(x) <= 25)]
+        chunk = chunk[
+            (chunk["path"].apply(lambda x: len(x) <= 25)) & (chunk["curve_type"] != "C")
+        ]
         chunk = parse_splitted(chunk)
         chunk.drop(columns=["path"], axis=1, inplace=True)
 

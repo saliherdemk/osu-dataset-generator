@@ -43,6 +43,7 @@ class DataExporter:
                     "repeat",
                     "length",
                     "spinner_time",
+                    "new_combo",
                 ],
             ),
             (
@@ -111,6 +112,7 @@ class DataExporter:
                         obj["repeat"],
                         obj["length"],
                         obj["spinner_time"],
+                        obj["new_combo"],
                     ]
                 )
 
