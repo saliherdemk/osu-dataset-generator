@@ -3,17 +3,12 @@ import argparse
 import pandas as pd
 
 
-def merge_datasets(dataset_one, dataset_two, output_file):
-
-    file_one = os.path.join(dataset_one, "hit_objects_formatted.csv")
-    file_two = os.path.join(dataset_two, "hit_objects_formatted.csv")
-
+def merge_datasets(file_one, file_two, output_file):
     df_one = pd.read_csv(file_one)
     df_two = pd.read_csv(file_two)
 
-    new_rows = df_two[~df_two["id"].isin(df_one["ID"])]
+    new_rows = df_two[~df_two["id"].isin(df_one["id"])]
     merged = pd.concat([df_one, new_rows], ignore_index=True)
-    merged = merged.sort_values(by="id").reset_index(drop=True)
     merged["unique_id"] = range(len(merged))
 
     merged.to_csv(output_file, index=False)
@@ -24,11 +19,11 @@ def merge_datasets(dataset_one, dataset_two, output_file):
 def main():
     parser = argparse.ArgumentParser(description="Merge datasets")
     parser.add_argument(
-        "--dataset_one",
+        "--file_one",
         required=True,
     )
     parser.add_argument(
-        "--dataset_two",
+        "--file_two",
         required=True,
     )
     parser.add_argument(
@@ -38,7 +33,7 @@ def main():
 
     args = parser.parse_args()
 
-    merge_datasets(args.dataset_one, args.dataset_two, args.output_file)
+    merge_datasets(args.file_one, args.file_two, args.output_file)
 
 
 if __name__ == "__main__":

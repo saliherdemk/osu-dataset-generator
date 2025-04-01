@@ -157,9 +157,9 @@ Here is the final dataset format:
 If you collect more data later, you can merge datasets. After processing your second dataset, merge it with `merge_datasets.py`
 
 ```
-python Dataset/merge_datasets.py --dataset_one=/mnt/L-HDD/dataset1 --dataset_two=/mnt/L-HDD/dataset2 --output_file=/mnt/L-HDD/merged.csv
+python Dataset/merge_datasets.py --file_one=/mnt/L-HDD/dataset1.csv --file_two=/mnt/L-HDD/dataset2.csv --output_file=/mnt/L-HDD/merged.csv
 ```
 
-Notice that `--output_file` argument is a file path not a directory. This script assumes both dataset folders have been processed and contain a `hit_objects_formatted.csv` file. It will filter and add beatmaps from the second dataset that are not present in the first.
+It will filter the beatmaps based on the id column and add the beatmaps from the second dataset that are not present in the first.
 
 

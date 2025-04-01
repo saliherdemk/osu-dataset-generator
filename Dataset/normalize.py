@@ -21,7 +21,37 @@ def normalize_categoricals(df):
         "curve_type",
         "new_combo",
     ]
+
+    expected_columns = [
+        "type_break",
+        "type_circle",
+        "type_slider",
+        "type_spinner",
+        "hit_sound_0",
+        "hit_sound_2",
+        "hit_sound_4",
+        "hit_sound_6",
+        "hit_sound_8",
+        "hit_sound_10",
+        "hit_sound_12",
+        "hit_sound_14",
+        "sample_set_0.0",
+        "sample_set_1.0",
+        "sample_set_2.0",
+        "sample_set_3.0",
+        "effects_0.0",
+        "effects_1.0",
+        "curve_type_B",
+        "curve_type_E",
+        "curve_type_L",
+        "curve_type_P",
+        "new_combo_0",
+        "new_combo_1",
+    ]
     df = pd.get_dummies(df, columns=categorical_columns, prefix=categorical_columns)
+    for col in expected_columns:
+        if col not in df.columns:
+            df[col] = "False"
     return df
 
 
