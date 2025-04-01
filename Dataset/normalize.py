@@ -13,7 +13,14 @@ def correct_effect_value(x):
 def normalize_categoricals(df):
     df["effects"] = df["effects"].apply(correct_effect_value)
 
-    categorical_columns = ["type", "hit_sound", "sample_set", "effects", "curve_type"]
+    categorical_columns = [
+        "type",
+        "hit_sound",
+        "sample_set",
+        "effects",
+        "curve_type",
+        "new_combo",
+    ]
     df = pd.get_dummies(df, columns=categorical_columns, prefix=categorical_columns)
     return df
 

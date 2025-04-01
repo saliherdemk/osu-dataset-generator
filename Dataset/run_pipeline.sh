@@ -5,6 +5,13 @@ display_usage() {
     exit 1
 }
 
+check_temp_directory() {
+    if [ -d "$TEMP_EXTRACTED_FOLDER" ]; then
+        echo "Error: Temporary folder '$TEMP_EXTRACTED_FOLDER' already exists."
+        exit 1
+    fi
+}
+
 if [ "$#" -ne 3 ]; then
     display_usage
 fi
@@ -12,6 +19,8 @@ fi
 SONGS_FOLDER="$1"
 DATASET_FOLDER="$2"
 TEMP_EXTRACTED_FOLDER="$3"
+
+check_temp_directory
 
 trap "rm -rf $TEMP_EXTRACTED_FOLDER" EXIT
 

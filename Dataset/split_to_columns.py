@@ -94,7 +94,9 @@ def fix(input_file):
         reader = csv.reader(f, delimiter=",")
         rows = list(reader)
 
-    max_columns = max(len(row) for row in rows) - 38
+    def_col_nums = len([row for row in rows[0] if not row.startswith("path_")])
+
+    max_columns = max(len(row) for row in rows) - def_col_nums - 1
     last_path = int(rows[0][-1].split("_")[1])
 
     headers = rows[0] + [f"path_{i}" for i in range(last_path + 1, max_columns)]

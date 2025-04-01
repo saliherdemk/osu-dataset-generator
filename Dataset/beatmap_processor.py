@@ -46,7 +46,7 @@ class BeatmapProcessor:
                 spinner_time = 0
                 repeat = 0
                 length = 0
-                new_combo = 0
+                new_combo = obj_type & 4 != 0
 
                 if obj_type & 1:
                     t = "circle"
@@ -56,9 +56,6 @@ class BeatmapProcessor:
                     path = object_data[0]
                     repeat = object_data[1]
                     length = object_data[2]
-
-                elif obj_type & 4:
-                    new_combo = 1
 
                 elif obj_type & 8:
                     t = "spinner"

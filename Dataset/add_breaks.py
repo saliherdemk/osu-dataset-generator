@@ -37,7 +37,7 @@ class Formatter:
                     audio_features.append(
                         [
                             id,
-                            frame_time,
+                            frame_time * 1000,
                             "break",
                             mfcc_segment,
                             rms_segment[0],
@@ -73,17 +73,12 @@ class Formatter:
         )
         results = [res for res in results if res is not None]
         result = pd.concat(results)
+        self.merge(result)
 
-        output_file = os.path.join(self.dataset_path, "breaks.csv")
-        result.to_csv(output_file, index=False)
-        print("Data saved to ", output_file)
-
-    def merge_breaks(self):
+    def merge(self, breaks_df):
         hit_objects_path = os.path.join(self.dataset_path, "hit_objects_formatted.csv")
-        breaks_path = os.path.join(self.dataset_path, "breaks.csv")
 
         hit_objects_df = pd.read_csv(hit_objects_path)
-        breaks_df = pd.read_csv(breaks_path)
         last_id = hit_objects_df["unique_id"].max()
         breaks_df["unique_id"] = range(last_id + 1, last_id + 1 + len(breaks_df))
         breaks_df["type"] = "break"
@@ -93,9 +88,15 @@ class Formatter:
             if col not in breaks_df.columns:
                 breaks_df[col] = 0
         merged_df = pd.concat([hit_objects_df, breaks_df], ignore_index=True)
-        merged_df = merged_df.sort_values(by="id").reset_index(drop=True)
-        merged_df.to_csv(hit_objects_path, index=False)
-        print("Merged file saved as", hit_objects_path)
+
+        sorted_df = merged_df.groupby("id", group_keys=False).apply(
+            lambda g: g.sort_values("time")
+        )
+        sorted_df["time_interval"] = sorted_df.groupby("id")["time"].diff()
+
+        output_file_path = os.path.join(self.dataset_path, "dataset.csv")
+        sorted_df.to_csv(output_file_path, index=False)
+        print("Merged file saved as", output_file_path)
 
 
 def main():
@@ -104,12 +105,11 @@ def main():
         "--dataset_path",
         required=True,
     )
-    parser.add_argument("--merge", action="store_true", default=False)
     args = parser.parse_args()
 
     formatter = Formatter(args.dataset_path)
 
-    formatter.merge_breaks() if args.merge else formatter.format_dataset()
+    formatter.format_dataset()
 
 
 if __name__ == "__main__":
