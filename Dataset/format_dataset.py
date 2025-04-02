@@ -170,7 +170,7 @@ class Formatter:
         print(len(grouped), "group remaining")
 
         start_index = 0
-        chunk_size = 10
+        chunk_size = 1000
         while start_index < len(grouped):
             end_index = start_index + chunk_size
             end_index = min(end_index, len(grouped))
