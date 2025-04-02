@@ -61,7 +61,7 @@ def parse_mfcc(mfcc_str):
     return np.array(mfcc_values, dtype=np.float32)
 
 
-def split_to_columns(input_file, output_file, chunk_size=10000):
+def split_to_columns(input_file, output_file, chunk_size=1000):
     reader = pd.read_csv(input_file, chunksize=chunk_size)
     first_chunk = True
 

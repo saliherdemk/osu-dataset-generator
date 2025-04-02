@@ -32,6 +32,7 @@ class Formatter:
             "sample_set",
             "volume",
             "effects",
+            "difficulty_rating",
         ]
         for col in cols:
             df[col] = pd.NA
@@ -44,17 +45,20 @@ class Formatter:
         beatmaps_df = self.beatmaps_df
         time_points_df = self.time_points_df
 
-        base_velocities = (
+        selected_columns = (
             beatmaps_df.set_index("id")
-            .loc[beatmap_ids, "slider_multiplier"]
-            .values.astype(float)
+            .loc[beatmap_ids, ["slider_multiplier", "difficulty_rating"]]
+            .astype(float)
         )
+
+        base_velocities = selected_columns["slider_multiplier"].values
+        difficulty_ratings = selected_columns["difficulty_rating"].values
 
         grouped_time_points = time_points_df.groupby("id")
 
         results = []
-        for beatmap_id, target_time, base_velocity in zip(
-            beatmap_ids, target_times, base_velocities
+        for beatmap_id, target_time, base_velocity, difficulty_rating in zip(
+            beatmap_ids, target_times, base_velocities, difficulty_ratings
         ):
             beatmap_time_points = grouped_time_points.get_group(beatmap_id)
             df_filtered = beatmap_time_points[
@@ -112,6 +116,7 @@ class Formatter:
                     "sample_set": sample_set,
                     "volume": volume,
                     "effects": effects,
+                    "difficulty_rating": difficulty_rating,
                 }
             )
 
@@ -143,6 +148,7 @@ class Formatter:
                 "sample_set",
                 "volume",
                 "effects",
+                "difficulty_rating",
             ],
         ] = timing_df.values
 
@@ -164,12 +170,12 @@ class Formatter:
         print(len(grouped), "group remaining")
 
         start_index = 0
-        chunk_size = 1000
+        chunk_size = 10
         while start_index < len(grouped):
             end_index = start_index + chunk_size
             end_index = min(end_index, len(grouped))
             results = Parallel(n_jobs=-1)(
-                delayed(self.safe_process)(group)
+                delayed(self.process)(group)
                 for _, group in tqdm(
                     grouped[start_index:end_index], desc="Processing Groups"
                 )

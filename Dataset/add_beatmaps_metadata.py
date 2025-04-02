@@ -66,7 +66,7 @@ def add_metadata(dataset_folder):
         (status, ranked_date, beatmaps) = metadatas[beatmapset_id]
         row["status"] = status
         row["ranked_date"] = ranked_date
-        row["difficuly_rating"] = beatmaps[version]
+        row["difficulty_rating"] = beatmaps[version]
         return row
 
     beatmaps_df = beatmaps_df.apply(fill_metadatas, axis=1)
