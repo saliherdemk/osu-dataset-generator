@@ -106,17 +106,22 @@ def normalize_paths(df):
     return df
 
 
-def normalize(input_file, output_file):
-    df = pd.read_csv(input_file)
-    print("Normalizing...")
+def normalize(input_file, output_file, chunk_size=4000000):
+    first_chunk = True
 
-    df = normalize_categoricals(df)
-    df = normalize_nums(df)
-    df = normalize_log(df)
-    df = normalize_audio(df)
-    df = normalize_paths(df)
+    for chunk in pd.read_csv(input_file, chunksize=chunk_size):
+        print("Normalizing chunk...")
 
-    df.to_csv(output_file, index=False)
+        chunk = normalize_categoricals(chunk)
+        chunk = normalize_nums(chunk)
+        chunk = normalize_log(chunk)
+        chunk = normalize_audio(chunk)
+        chunk = normalize_paths(chunk)
+
+        chunk.to_csv(output_file, mode="a", index=False, header=first_chunk)
+        first_chunk = False
+
+    print("Processing complete.")
 
 
 def main():

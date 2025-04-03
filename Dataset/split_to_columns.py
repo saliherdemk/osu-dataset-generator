@@ -94,12 +94,10 @@ def fix(input_file):
         reader = csv.reader(f, delimiter=",")
         rows = list(reader)
 
-    def_col_nums = len([row for row in rows[0] if not row.startswith("path_")])
-
-    max_columns = max(len(row) for row in rows) - def_col_nums - 1
+    last_column = max(len(row) for row in rows) - len(rows[0])
     last_path = int(rows[0][-1].split("_")[1])
 
-    headers = rows[0] + [f"path_{i}" for i in range(last_path + 1, max_columns)]
+    headers = rows[0] + [f"path_{last_path + i}" for i in range(1, last_column + 1)]
     rows[0] = headers
 
     with open(input_file, "w", newline="") as f:
