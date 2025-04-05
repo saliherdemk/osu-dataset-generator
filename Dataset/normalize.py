@@ -12,6 +12,7 @@ def correct_effect_value(x):
 
 def normalize_categoricals(df):
     df["effects"] = df["effects"].apply(correct_effect_value)
+    df["difficulty_rating"] = df["difficulty_rating"].astype(int)
 
     categorical_columns = [
         "type",
@@ -20,35 +21,28 @@ def normalize_categoricals(df):
         "effects",
         "curve_type",
         "new_combo",
+        "difficulty_rating",
     ]
 
-    expected_columns = [
-        "type_break",
-        "type_circle",
-        "type_slider",
-        "type_spinner",
-        "hit_sound_0",
-        "hit_sound_2",
-        "hit_sound_4",
-        "hit_sound_6",
-        "hit_sound_8",
-        "hit_sound_10",
-        "hit_sound_12",
-        "hit_sound_14",
-        "sample_set_0.0",
-        "sample_set_1.0",
-        "sample_set_2.0",
-        "sample_set_3.0",
-        "effects_0.0",
-        "effects_1.0",
-        "curve_type_B",
-        "curve_type_E",
-        "curve_type_L",
-        "curve_type_P",
-        "new_combo_0",
-        "new_combo_1",
-    ]
+    expected_types = [f"type_{i}" for i in ["break", "circle", "slider", "spinner"]]
+    expected_hitsounds = [f"hit_sound_{i}" for i in range(0, 16, 2)]
+    expected_sample_set = [f"sample_set_{i}.0" for i in range(4)]
+    expected_effects = [f"effects_{i}.0" for i in range(2)]
+    expected_curve_types = [f"curve_type_{i}" for i in ["B", "E", "L", "P"]]
+    expected_new_combos = [f"new_combo_{i}" for i in range(2)]
+    expected_difficulty_rating = [f"difficulty_rating_{i}" for i in range(13)]
+
+    expected_columns = (
+        expected_types
+        + expected_hitsounds
+        + expected_sample_set
+        + expected_effects
+        + expected_curve_types
+        + expected_new_combos
+        + expected_difficulty_rating
+    )
     df = pd.get_dummies(df, columns=categorical_columns, prefix=categorical_columns)
+
     for col in expected_columns:
         if col not in df.columns:
             df[col] = "False"
