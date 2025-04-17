@@ -1,9 +1,9 @@
 import os
 import argparse
-from librosa.feature import mfcc
 import pandas as pd
 import numpy as np
 from joblib import Parallel, delayed
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from tqdm import tqdm
 import librosa
 
@@ -46,11 +46,12 @@ class Formatter:
                 "effects",
                 "difficulty_rating",
                 "frame_time",
+                "rms",
                 "has_hit_object",
             ]
-            mfcc_columns = [f"mfcc_{i+1}" for i in range(20)]
+            mfcc_columns = [f"mfcc_{i}" for i in range(1, 21)]
 
-            df_template = pd.DataFrame(columns=columns + mfcc_columns + ["rms"])
+            df_template = pd.DataFrame(columns=columns + mfcc_columns)
 
             df_template.to_csv(checkpoint_file, index=False)
 
@@ -137,6 +138,96 @@ class Formatter:
 
         return pd.DataFrame(results)
 
+    def process_song(self, song_id, song_path):
+        beatmaps = self.hit_objects_df[
+            self.hit_objects_df["beatmap_id"] == int(song_id)
+        ].copy()
+
+        timing_attributes = [
+            self.get_timing_attributes(series) for _, series in beatmaps.groupby("id")
+        ]
+        timing_df = pd.concat(timing_attributes, ignore_index=True)
+
+        beatmaps = beatmaps.reset_index(drop=True)
+        beatmaps = pd.concat([beatmaps, timing_df], axis=1)
+
+        y, sr = librosa.load(song_path)  # sr=22050
+        hop_length = 256
+        mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=20, hop_length=hop_length)
+        rms = librosa.feature.rms(y=y, hop_length=hop_length)
+
+        mfcc_length = mfcc.shape[0]
+
+        all_rows = []
+
+        for seq_id, group in beatmaps.groupby("id"):
+            group = group.copy()
+
+            time_array = group["time"] / 1000
+            frame_indices = librosa.time_to_frames(
+                time_array, sr=sr, hop_length=hop_length
+            )  # frames[i] = floor( times[i] * sr / hop_length )
+            frame_times = librosa.frames_to_time(
+                frame_indices, sr=sr, hop_length=hop_length
+            )
+
+            group = group.reset_index(drop=True)
+            group["frame_time"] = frame_times * 1000
+            group["mfcc"] = [mfcc[:, f] for f in frame_indices]
+            group["rms"] = [rms[0][f] for f in frame_indices]
+            group["has_hit_object"] = True
+
+            for i in range(mfcc_length):
+                group[f"mfcc_{i+1}"] = group["mfcc"].apply(lambda x: x[i])
+            group.drop(columns="mfcc", inplace=True)
+
+            missing_frames = [i for i in range(mfcc.shape[1]) if i not in frame_indices]
+
+            silent_rows = []
+            for f in missing_frames:
+                row = {
+                    "id": seq_id,
+                    "beatmap_id": int(song_id),
+                    "time": librosa.frames_to_time(f, sr=sr, hop_length=hop_length)
+                    * 1000,
+                    "frame_time": librosa.frames_to_time(
+                        f, sr=sr, hop_length=hop_length
+                    )
+                    * 1000,
+                    "rms": rms[0][f],
+                    "has_hit_object": False,
+                }
+                for i in range(mfcc_length):
+                    row[f"mfcc_{i+1}"] = mfcc[i, f]
+                silent_rows.append(row)
+
+            silent_df = pd.DataFrame(silent_rows)
+            all_rows.append(pd.concat([group, silent_df], ignore_index=True))
+
+        final_df = pd.concat(all_rows, ignore_index=True)
+        final_df = final_df.sort_values(["id", "time"]).reset_index(drop=True)
+
+        hit_times = (
+            final_df[final_df["has_hit_object"]]
+            .groupby("id")["time"]
+            .agg(["first", "last"])
+        )
+
+        final_df = (
+            final_df.groupby("id", group_keys=False)[final_df.columns.tolist()]
+            .apply(
+                lambda group: group[
+                    group["has_hit_object"]
+                    | (
+                        (group["time"] >= hit_times.loc[group.name, "first"])
+                        & (group["time"] <= hit_times.loc[group.name, "last"])
+                    )
+                ]
+            )
+            .reset_index(drop=True)
+        )
+        return final_df
+
     def format_dataset(self):
         unique_ids = set()
         chunks = pd.read_csv(
@@ -158,103 +249,17 @@ class Formatter:
             if song_id not in unique_ids
         }
 
-        for song_id, song_path in tqdm(songs_full_paths.items()):
-            beatmaps = self.hit_objects_df[
-                self.hit_objects_df["beatmap_id"] == int(song_id)
-            ].copy()
+        with ProcessPoolExecutor(max_workers=os.cpu_count()) as executor:
+            futures = {
+                executor.submit(self.process_song, song_id, song_path): song_id
+                for song_id, song_path in songs_full_paths.items()
+            }
 
-            timing_attributes = [
-                self.get_timing_attributes(series)
-                for _, series in beatmaps.groupby("id")
-            ]
-            timing_df = pd.concat(timing_attributes, ignore_index=True)
-
-            beatmaps = beatmaps.reset_index(drop=True)
-            beatmaps = pd.concat([beatmaps, timing_df], axis=1)
-
-            y, sr = librosa.load(song_path)  # sr=22050
-            hop_length = 256
-            mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=20, hop_length=hop_length)
-            rms = librosa.feature.rms(y=y, hop_length=hop_length)
-
-            mfcc_length = mfcc.shape[0]
-
-            all_rows = []
-
-            for seq_id, group in beatmaps.groupby("id"):
-                group = group.copy()
-
-                time_array = group["time"] / 1000
-                frame_indices = librosa.time_to_frames(
-                    time_array, sr=sr, hop_length=hop_length
-                )  # frames[i] = floor( times[i] * sr / hop_length )
-                frame_times = librosa.frames_to_time(
-                    frame_indices, sr=sr, hop_length=hop_length
+            for future in tqdm(as_completed(futures), total=len(futures)):
+                final_df = future.result()
+                final_df.to_csv(
+                    self.checkpoint_file, mode="a", header=False, index=False
                 )
-
-                group = group.reset_index(drop=True)
-                group["frame_time"] = frame_times * 1000
-                group["mfcc"] = [mfcc[:, f] for f in frame_indices]
-                group["rms"] = [rms[0][f] for f in frame_indices]
-                group["has_hit_object"] = True
-
-                for i in range(mfcc_length):
-                    group[f"mfcc_{i+1}"] = group["mfcc"].apply(lambda x: x[i])
-                group.drop(columns="mfcc", inplace=True)
-
-                missing_frames = [
-                    i for i in range(mfcc.shape[1]) if i not in frame_indices
-                ]
-
-                silent_rows = []
-                for f in missing_frames:
-                    row = {
-                        "id": seq_id,
-                        "beatmap_id": int(song_id),
-                        "time": librosa.frames_to_time(f, sr=sr, hop_length=hop_length)
-                        * 1000,
-                        "frame_time": librosa.frames_to_time(
-                            f, sr=sr, hop_length=hop_length
-                        )
-                        * 1000,
-                        "rms": rms[0][f],
-                        "has_hit_object": False,
-                    }
-                    for i in range(mfcc_length):
-                        row[f"mfcc_{i+1}"] = mfcc[i, f]
-                    silent_rows.append(row)
-
-                silent_df = pd.DataFrame(silent_rows)
-                all_rows.append(pd.concat([group, silent_df], ignore_index=True))
-
-            final_df = pd.concat(all_rows, ignore_index=True)
-            final_df = final_df.sort_values(["id", "time"]).reset_index(drop=True)
-
-            hit_times = (
-                final_df[final_df["has_hit_object"]]
-                .groupby("id")["time"]
-                .agg(["first", "last"])
-            )
-
-            final_df = (
-                final_df.groupby("id", group_keys=False)
-                .apply(
-                    lambda group: group[
-                        group["has_hit_object"]
-                        | (
-                            (group["time"] >= hit_times.loc[group.name, "first"])
-                            & (group["time"] <= hit_times.loc[group.name, "last"])
-                        )
-                    ]
-                )
-                .reset_index(drop=True)
-            )
-            final_df.to_csv(
-                self.checkpoint_file,
-                mode="a",
-                header=False,
-                index=False,
-            )
 
 
 def main():

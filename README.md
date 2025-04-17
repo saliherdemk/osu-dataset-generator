@@ -89,14 +89,16 @@ values. Also we need the corresponding `MFCC` and `RMS` values for that time whi
 python Dataset/format_dataset.py --dataset_path=/mnt/L-HDD/dataset
 ```
 
-Now you should have your `hit_objects_formatted.csv` file on your dataset folder.
+Now you should have your `formatted.csv` file on your dataset folder.
 
-`hit_objects_formatted.csv` should look like this:
-| unique_id | id         | time | type   | x   | y   | hit_sound | path         | repeat | length           | spinner_time | beatmap_id | mfcc                   | rms             | beat_length        | meter | slider_velocity     | sample_set | volume | effects |
-|-----------|-----------|------|--------|-----|-----|-----------|--------------|--------|------------------|--------------|------------|------------------------|----------------|--------------------|-------|---------------------|------------|--------|---------|
-| 7         | 2338303-0 | 7208 | circle | 316 | 211 | 0         |              | 0      | 0                | 0            | 2338303    | [-14.43, ..., -8.69]  | 0.3607         | 416.666666666667   | 4     | -111.111111111111   | 2          | 65     | 0       |
-| 8         | 2338303-0 | 7937 | circle | 101 | 13  | 0         |              | 0      | 0                | 0            | 2338303    | [-133.75, ..., -28.20] | 0.1359         | 416.666666666667   | 4     | -111.111111111111   | 2          | 65     | 0       |
-| 9         | 2338303-0 | 8041 | slider | 71  | 0   | 0         | P\|3:46\|28:141 | 1      | 180.400005505371 | 0            | 2338303    | [-48.53, ..., -11.39]  | 0.2230         | 416.666666666667   | 4     | -90.9090909090909   | 2          | 80     | 0       |
+`formatted.csv` should look like this:
+|id       |time            |type  |x  |y  |hit_sound|path   |repeat|length          |spinner_time|new_combo|beatmap_id|beat_length     |meter|slider_velocity  |sample_set|volume|effects|difficulty_rating|frame_time      |rms        |has_hit_object|mfcc_1    |mfcc_2  |mfcc_3    |mfcc_4    |mfcc_5   |mfcc_6    |mfcc_7  |mfcc_8    |mfcc_9    |mfcc_10   |mfcc_11   |mfcc_12   |mfcc_13  |mfcc_14  |mfcc_15  |mfcc_16  |mfcc_17 |mfcc_18    |mfcc_19   |mfcc_20   |
+|---------|----------------|------|---|---|---------|-------|------|----------------|------------|---------|----------|----------------|-----|-----------------|----------|------|-------|-----------------|----------------|-----------|--------------|----------|--------|----------|----------|---------|----------|--------|----------|----------|----------|----------|----------|---------|---------|---------|---------|--------|-----------|----------|----------|
+|2337169-0|231             |slider|86 |114|0        |L&#124;81:47|1     |67.5000025749208|0           |True     |2337169   |689.655172413793|4    |-133.333333333333|2         |40    |0      |4.42             |220.589569160998|0.009649204|True          |-450.08582|76.15621|1.0709565 |-9.865276 |1.2259159|1.8149039 |6.453965|0.1860156 |-19.403503|-24.475204|-17.776352|-9.894934 |5.3546524|11.042467|-4.027216|-8.553526|4.964045|2.0848522  |-12.029092|-0.9998989|
+|2337169-0|232.199546485261|      |   |   |         |       |      |                |            |         |2337169   |                |     |                 |          |      |       |                 |232.199546485261|0.024603726|False         |-361.93954|125.3844|-22.152828|-4.5030856|10.08624 |-10.239243|6.575365|-0.6939366|-27.928047|-23.1558  |-17.890675|-10.738436|12.190224|12.025063|-7.063714|-8.029292|3.16954 |-0.16949219|-15.290938|-6.887203 |
+|2337169-0|11609           |slider|387|0  |0        |P&#124;359:12&#124;329:45|1     |58.4999973220826|0           |False    |2337169   |689.655172413793|4    |-76.9230769230769|2         |60    |0      |4.42             |11598.3673469388|0.18942297 |True          |-75.53014 |57.45023|30.394821 |44.164585 |10.207699|30.548073 |10.782623|13.519032 |-0.89644486|-1.6839523|-16.745308|-3.2124329|1.0503346|9.376907 |4.470006 |-0.87697923|-11.741819|3.6686616  |-0.110064745|-1.6746883|
+|2337169-0|11609.977324263 |      |   |   |         |       |      |                |            |         |2337169   |                |     |                 |          |      |       |                 |11609.977324263 |0.19190039 |False         |-75.5213  |60.621395|31.747063 |42.687218 |10.75659 |31.396027 |10.988749|12.916475 |-0.25296926|-3.476209 |-17.38247 |-1.6582112|0.01946672|7.639636 |2.4652402|-2.2092977|-10.815493|3.794812   |-0.7236271|-2.1331735|
+
 
 
 
@@ -108,25 +110,6 @@ python Dataset/format_dataset.py --dataset_path=/mnt/L-HDD/dataset --clear
 ```
 This will ensure that dataset is not contains any not-processed row.
 
-
-## Breaks
-
-Since we were working with hit objects, break periods were not included in the dataset. Process break points using `add_breaks.py`
-
-```
-python Dataset/add_breaks.py --dataset_path=/mnt/L-HDD/dataset
-```
-
-
-Once complete, you should have a `dataset.csv` file in your dataset folder which looks like this:
-
-| unique_id  | id | time | type | x | y | hit_sound  | path | repeat | length | spinner_time | new_combo | beatmap_id | mfcc | rms | beat_length | meter | slider_velocity | sample_set | volume | effects | time_interval |
-|------------|-------------|-------|--------|-----|-----|------------|-------------|--------|------------|--------------|-----------|------------|----------------------------------------------------------------------|-------------|-------------|-------|-----------------|------------|--------|---------|---------------|
-| 774        | 2337169-0   | 231   | slider | 86  | 114 | 0          | L\|81:47     | 1      | 67.500003  | 0            | 1         | 2337169    | [-541.5654,..., 0.] | 0.004970386 | 689.655172 | 4     | -133.33         | 2          | 40     | 0       |               |
-| 775        | 2337169-0   | 920   | slider | 170 | 149 | 0          | L\|165:216   | 1      | 67.500003  | 0            | 0         | 2337169    | [-242.96797,..., -10.411037] | 0.085116714 | 689.655172 | 4     | -133.33         | 2          | 40     | 0       | 689           |
-| 776        | 2337169-0   | 1610  | circle | 247 | 47  | 2          |             | 0      | 0          | 0            | 0         | 2337169    | [-196.65742,..., -14.851294] | 0.088140659 | 689.655172 | 4     | -133.33         | 2          | 40     | 0       | 690           |
-
-Dataset should be sorted by `time` and has `time_interval` column shows the time difference between that hit object and the previous one.
 
 ## Split MFCC and Curve Points Into Columns
 Since we stored our MFCC's and curve points as string in one cell. We need to spread across to new columns.
