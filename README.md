@@ -6,14 +6,14 @@ Use `extract_osz.py` to unzip them.
 
 
 ```
-python Dataset/extract_osz.py --input_folder=/home/saliherdemk/songs --output_folder=/home/saliherdemk/extracted
+python Dataset/pipeline/extract_osz.py --input_folder=/home/saliherdemk/songs --output_folder=/home/saliherdemk/extracted
 ```
 
 Now you have .osu file and corresponding audio file for every beatmap that you own. Use `generate_dataset.py` script to generate your dataset.
 
 
 ```
-python Dataset/generate_dataset.py --input_folder=/home/saliherdemk/extracted --dataset_path=/home/saliherdemk/dataset
+python Dataset/pipeline/generate_dataset.py --input_folder=/home/saliherdemk/extracted --dataset_path=/home/saliherdemk/dataset
 ```
 
 That will generate 3 files and one folder.
@@ -24,18 +24,18 @@ Next, retrieve beatmap metadata and add it to the dataset. For this, you need an
 
  
 ```
-python Dataset/add_beatmaps_metadata.py --dataset_folder=/home/saliherdemk/dataset
+python Dataset/pipeline/add_beatmaps_metadata.py --dataset_folder=/home/saliherdemk/dataset
 ```
 
 Filter ranked maps and remove old maps. (ie > 2010) 
 ```
-python Dataset/filter_ranked.py --dataset_folder=/home/saliherdemk/dataset
+python Dataset/pipeline/filter_ranked.py --dataset_folder=/home/saliherdemk/dataset
 ```
 
 Some of the audio files might be corrupted or not ready for processing. Fix those.
 
 ```
-python Dataset/fix_corrupted_audio.py --dataset_folder=/home/saliherdemk/dataset
+python Dataset/pipeline/fix_corrupted_audio.py --dataset_folder=/home/saliherdemk/dataset
 ```
 
 # Run Pipeline

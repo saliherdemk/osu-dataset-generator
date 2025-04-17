@@ -1,5 +1,6 @@
 import os
 import argparse
+from librosa.feature import mfcc
 import pandas as pd
 import numpy as np
 from joblib import Parallel, delayed
@@ -10,43 +11,57 @@ import librosa
 class Formatter:
     def __init__(self, dataset_path) -> None:
         beatmap_path = os.path.join(dataset_path, "beatmaps.csv")
-        self.beatmaps_df = pd.read_csv(beatmap_path, parse_dates=["ranked_date"])
-        self.time_points_df = pd.read_csv(
-            os.path.join(dataset_path, "timing_points.csv")
-        )
-        self.checkpoint_file = os.path.join(dataset_path, "hit_objects_formatted.csv")
-        self.hit_objects_df = self.get_checkpoint(dataset_path)
+        time_points_path = os.path.join(dataset_path, "timing_points.csv")
+        hit_objects_path = os.path.join(dataset_path, "hit_objects.csv")
+        self.beatmaps_df = pd.read_csv(beatmap_path)
+        self.time_points_df = pd.read_csv(time_points_path)
+        self.hit_objects_df = pd.read_csv(hit_objects_path)
+
+        self.checkpoint_file = self.get_checkpoint_file(dataset_path)
 
         self.audio_path = os.path.join(dataset_path, "audio")
 
-    def get_checkpoint(self, dataset_path):
-        if os.path.exists(self.checkpoint_file):
-            return pd.read_csv(self.checkpoint_file)
-        df = pd.read_csv(os.path.join(dataset_path, "hit_objects.csv"))
-        cols = [
-            "mfcc",
-            "rms",
-            "beat_length",
-            "meter",
-            "slider_velocity",
-            "sample_set",
-            "volume",
-            "effects",
-            "difficulty_rating",
-        ]
-        for col in cols:
-            df[col] = pd.NA
-        df["unique_id"] = range(1, len(df) + 1)
-        return df
+    def get_checkpoint_file(self, dataset_path):
+        checkpoint_file = os.path.join(dataset_path, "formatted.csv")
+
+        if not os.path.exists(checkpoint_file):
+            columns = [
+                "id",
+                "time",
+                "type",
+                "x",
+                "y",
+                "hit_sound",
+                "path",
+                "repeat",
+                "length",
+                "spinner_time",
+                "new_combo",
+                "beatmap_id",
+                "beat_length",
+                "meter",
+                "slider_velocity",
+                "sample_set",
+                "volume",
+                "effects",
+                "difficulty_rating",
+                "frame_time",
+                "has_hit_object",
+            ]
+            mfcc_columns = [f"mfcc_{i+1}" for i in range(20)]
+
+            df_template = pd.DataFrame(columns=columns + mfcc_columns + ["rms"])
+
+            df_template.to_csv(checkpoint_file, index=False)
+
+        return checkpoint_file
 
     def get_timing_attributes(self, series):
         beatmap_ids = series["id"].values
         target_times = series["time"].values
-        beatmaps_df = self.beatmaps_df
-        time_points_df = self.time_points_df
 
         selected_columns = (
-            beatmaps_df.set_index("id")
+            self.beatmaps_df.set_index("id")
             .loc[beatmap_ids, ["slider_multiplier", "difficulty_rating"]]
             .astype(float)
         )
@@ -54,7 +69,7 @@ class Formatter:
         base_velocities = selected_columns["slider_multiplier"].values
         difficulty_ratings = selected_columns["difficulty_rating"].values
 
-        grouped_time_points = time_points_df.groupby("id")
+        grouped_time_points = self.time_points_df.groupby("id")
 
         results = []
         for beatmap_id, target_time, base_velocity, difficulty_rating in zip(
@@ -122,89 +137,124 @@ class Formatter:
 
         return pd.DataFrame(results)
 
-    def process(self, series):
-        audio_folder = os.path.join(self.audio_path, str(series["beatmap_id"].iloc[0]))
-        audio_file = os.path.join(audio_folder, os.listdir(audio_folder)[0])
-        y, sr = librosa.load(audio_file)
-
-        mfcc = librosa.feature.mfcc(y=y, sr=sr)
-        rms_energy = librosa.feature.rms(y=y)
-
-        time_array = series["time_sec"].values
-        frame_indices = librosa.time_to_frames(time_array, sr=sr)
-
-        series["mfcc"] = [mfcc[:, f] for f in frame_indices]
-        series["rms"] = [rms_energy[0][f] for f in frame_indices]
-
-        timing_df = self.get_timing_attributes(series)
-
-        update_indices = series.index
-        series.loc[
-            update_indices,
-            [
-                "beat_length",
-                "meter",
-                "slider_velocity",
-                "sample_set",
-                "volume",
-                "effects",
-                "difficulty_rating",
-            ],
-        ] = timing_df.values
-
-        return series
-
-    def safe_process(self, group):
-        try:
-            return self.process(group)
-        except Exception as e:
-            print(f"Error processing group: {set(group["id"])}, Error: {e}")
-            return None
-
     def format_dataset(self):
-        hit_objects_df = self.hit_objects_df
-        not_processed = hit_objects_df[hit_objects_df["effects"].isna()].copy()
-        not_processed["time_sec"] = not_processed["time"] / 1000
+        unique_ids = set()
+        chunks = pd.read_csv(
+            self.checkpoint_file, usecols=["beatmap_id"], chunksize=10000
+        )
 
-        grouped = list(not_processed.groupby("id"))
-        print(len(grouped), "group remaining")
+        for chunk in chunks:
+            unique_ids.update(str(id) for id in chunk["beatmap_id"].unique())
+            del chunk
 
-        start_index = 0
-        chunk_size = 1000
-        while start_index < len(grouped):
-            end_index = start_index + chunk_size
-            end_index = min(end_index, len(grouped))
-            results = Parallel(n_jobs=-1)(
-                delayed(self.process)(group)
-                for _, group in tqdm(
-                    grouped[start_index:end_index], desc="Processing Groups"
+        songs_ids = os.listdir(self.audio_path)
+        songs_full_paths = {
+            song_id: os.path.join(
+                self.audio_path,
+                song_id,
+                os.listdir(os.path.join(self.audio_path, song_id))[0],
+            )
+            for song_id in songs_ids
+            if song_id not in unique_ids
+        }
+
+        for song_id, song_path in tqdm(songs_full_paths.items()):
+            beatmaps = self.hit_objects_df[
+                self.hit_objects_df["beatmap_id"] == int(song_id)
+            ].copy()
+
+            timing_attributes = [
+                self.get_timing_attributes(series)
+                for _, series in beatmaps.groupby("id")
+            ]
+            timing_df = pd.concat(timing_attributes, ignore_index=True)
+
+            beatmaps = beatmaps.reset_index(drop=True)
+            beatmaps = pd.concat([beatmaps, timing_df], axis=1)
+
+            y, sr = librosa.load(song_path)  # sr=22050
+            hop_length = 256
+            mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=20, hop_length=hop_length)
+            rms = librosa.feature.rms(y=y, hop_length=hop_length)
+
+            mfcc_length = mfcc.shape[0]
+
+            all_rows = []
+
+            for seq_id, group in beatmaps.groupby("id"):
+                group = group.copy()
+
+                time_array = group["time"] / 1000
+                frame_indices = librosa.time_to_frames(
+                    time_array, sr=sr, hop_length=hop_length
+                )  # frames[i] = floor( times[i] * sr / hop_length )
+                frame_times = librosa.frames_to_time(
+                    frame_indices, sr=sr, hop_length=hop_length
                 )
+
+                group = group.reset_index(drop=True)
+                group["frame_time"] = frame_times * 1000
+                group["mfcc"] = [mfcc[:, f] for f in frame_indices]
+                group["rms"] = [rms[0][f] for f in frame_indices]
+                group["has_hit_object"] = True
+
+                for i in range(mfcc_length):
+                    group[f"mfcc_{i+1}"] = group["mfcc"].apply(lambda x: x[i])
+                group.drop(columns="mfcc", inplace=True)
+
+                missing_frames = [
+                    i for i in range(mfcc.shape[1]) if i not in frame_indices
+                ]
+
+                silent_rows = []
+                for f in missing_frames:
+                    row = {
+                        "id": seq_id,
+                        "beatmap_id": int(song_id),
+                        "time": librosa.frames_to_time(f, sr=sr, hop_length=hop_length)
+                        * 1000,
+                        "frame_time": librosa.frames_to_time(
+                            f, sr=sr, hop_length=hop_length
+                        )
+                        * 1000,
+                        "rms": rms[0][f],
+                        "has_hit_object": False,
+                    }
+                    for i in range(mfcc_length):
+                        row[f"mfcc_{i+1}"] = mfcc[i, f]
+                    silent_rows.append(row)
+
+                silent_df = pd.DataFrame(silent_rows)
+                all_rows.append(pd.concat([group, silent_df], ignore_index=True))
+
+            final_df = pd.concat(all_rows, ignore_index=True)
+            final_df = final_df.sort_values(["id", "time"]).reset_index(drop=True)
+
+            hit_times = (
+                final_df[final_df["has_hit_object"]]
+                .groupby("id")["time"]
+                .agg(["first", "last"])
             )
 
-            results = [res for res in results if res is not None]
-            result = pd.concat(results)
-            self.hit_objects_df = self.hit_objects_df.set_index("unique_id")
-            result = result.set_index("unique_id")
-
-            self.hit_objects_df.update(result)
-
-            self.hit_objects_df = self.hit_objects_df.reset_index()
-            result.reset_index()
-
-            self.hit_objects_df.to_csv(self.checkpoint_file, index=False)
-
-            start_index = end_index
-
-
-def clear(dataset_path):
-    file_path = os.path.join(dataset_path, "hit_objects_formatted.csv")
-    df = pd.read_csv(file_path)
-    corrupted = df["mfcc"].isna()
-    num_of_corrupted = len(df[corrupted])
-    if num_of_corrupted > 0:
-        df = df[~corrupted]
-        df.to_csv(file_path, index=False)
-    print(f"Removed {num_of_corrupted} rows.")
+            final_df = (
+                final_df.groupby("id", group_keys=False)
+                .apply(
+                    lambda group: group[
+                        group["has_hit_object"]
+                        | (
+                            (group["time"] >= hit_times.loc[group.name, "first"])
+                            & (group["time"] <= hit_times.loc[group.name, "last"])
+                        )
+                    ]
+                )
+                .reset_index(drop=True)
+            )
+            final_df.to_csv(
+                self.checkpoint_file,
+                mode="a",
+                header=False,
+                index=False,
+            )
 
 
 def main():
@@ -217,7 +267,6 @@ def main():
     args = parser.parse_args()
 
     if args.clear:
-        clear(args.dataset_path)
         return
 
     formatter = Formatter(args.dataset_path)

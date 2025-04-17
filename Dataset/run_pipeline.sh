@@ -29,19 +29,19 @@ mkdir -p "$TEMP_EXTRACTED_FOLDER"
 echo "Using temporary extracted folder: $TEMP_EXTRACTED_FOLDER"
 
 echo "Extracting .osz files..."
-python Dataset/extract_osz.py --input_folder="$SONGS_FOLDER" --output_folder="$TEMP_EXTRACTED_FOLDER"
+python Dataset/pipeline/extract_osz.py --input_folder="$SONGS_FOLDER" --output_folder="$TEMP_EXTRACTED_FOLDER"
 
 echo "Generating dataset..."
-python Dataset/generate_dataset.py --input_folder="$TEMP_EXTRACTED_FOLDER" --dataset_path="$DATASET_FOLDER"
+python Dataset/pipeline/generate_dataset.py --input_folder="$TEMP_EXTRACTED_FOLDER" --dataset_path="$DATASET_FOLDER"
 
 echo "Adding beatmap metadata..."
-python Dataset/add_beatmaps_metadata.py --dataset_folder="$DATASET_FOLDER"
+python Dataset/pipeline/add_beatmaps_metadata.py --dataset_folder="$DATASET_FOLDER"
 
 echo "Filtering ranked beatmaps..."
-python Dataset/filter_ranked.py --dataset_folder="$DATASET_FOLDER"
+python Dataset/pipeline/filter_ranked.py --dataset_folder="$DATASET_FOLDER"
 
 echo "Fixing corrupted audio..."
-python Dataset/fix_corrupted_audio.py --dataset_folder="$DATASET_FOLDER"
+python Dataset/pipeline/fix_corrupted_audio.py --dataset_folder="$DATASET_FOLDER"
 
 echo "Pipeline completed successfully!"
 
