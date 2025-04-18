@@ -2,26 +2,22 @@ import argparse
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
-import re
 import csv
 
 
 def parse_path(row):
-    x = str(row["path"])
+    obj_type = row["type"]
+    obj_path = str(row["path"])
+
     curve_type = "E"
-    spinner_time = 0
     path = []
-    if x == "nan":
-        spinner_time = 0
-    elif not "|" in x:
-        spinner_time = x
-    else:
-        curve_type = x[0]
-        coordinates_str = x[2:].split("|")
+
+    if obj_type == "slider":
+        curve_type = obj_path[0]
+        coordinates_str = obj_path[2:].split("|")
         path = [list(map(int, point.split(":"))) for point in coordinates_str]
 
     row["curve_type"] = curve_type
-    row["spinner_time"] = spinner_time
     row["path"] = path
     return row
 
@@ -55,23 +51,11 @@ def parse_splitted(df):
     return pd.concat([df, path_df], axis=1)
 
 
-def parse_mfcc(mfcc_str):
-    mfcc_str = mfcc_str.replace("[", "").replace("]", "")
-    mfcc_values = re.split(r"\s+", mfcc_str.strip())
-    return np.array(mfcc_values, dtype=np.float32)
-
-
 def split_to_columns(input_file, output_file, chunk_size=1000):
     reader = pd.read_csv(input_file, chunksize=chunk_size)
     first_chunk = True
 
     for chunk in reader:
-        chunk["mfcc"] = chunk["mfcc"].apply(parse_mfcc)
-
-        mfcc_length = 20
-        for i in range(mfcc_length):
-            chunk[f"mfcc_{i+1}"] = chunk["mfcc"].apply(lambda x: x[i])
-        chunk.drop(columns="mfcc", axis=1, inplace=True)
 
         chunk = chunk.apply(parse_path, axis=1)
         chunk = chunk[
@@ -106,7 +90,7 @@ def fix(input_file):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Split MFCC and curve points")
+    parser = argparse.ArgumentParser(description="Split curve points")
     parser.add_argument(
         "--input_file",
         required=True,

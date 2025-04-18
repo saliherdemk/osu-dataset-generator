@@ -22,9 +22,10 @@ def normalize_categoricals(df):
         "curve_type",
         "new_combo",
         "difficulty_rating",
+        "has_hit_object",
     ]
 
-    expected_types = [f"type_{i}" for i in ["break", "circle", "slider", "spinner"]]
+    expected_types = [f"type_{i}" for i in ["circle", "slient", "slider", "spinner"]]
     expected_hitsounds = [f"hit_sound_{i}" for i in range(0, 16, 2)]
     expected_sample_set = [f"sample_set_{i}.0" for i in range(4)]
     expected_effects = [f"effects_{i}.0" for i in range(2)]
@@ -100,11 +101,43 @@ def normalize_paths(df):
     return df
 
 
+def set_column_dtypes(df):
+    strings = ["id", "type", "curve_type"]
+    df[strings] = df[strings].astype(str)
+
+    bools = ["new_combo", "has_hit_object"]
+    df[bools] = df[bools].astype(bool)
+
+    ints = ["beatmap_id", "spinner_time"]
+    df[ints] = df[ints].astype("int64")
+
+    floats = [col for col in df.columns if col not in strings + bools + ints]
+    df[floats] = df[floats].astype("float64")
+    return df
+
+
+def fillnanvalues(df):
+    values = {"type": "slient", "new_combo": False}
+
+    df = df.fillna(value=values)
+    fill_map = (
+        df[df["difficulty_rating"].notna()].groupby("id")["difficulty_rating"].first()
+    )
+    df["difficulty_rating"] = df["id"].map(fill_map)
+    df = df.fillna(0)
+
+    df = set_column_dtypes(df)
+
+    return df
+
+
 def normalize(input_file, output_file, chunk_size=4000000):
     first_chunk = True
 
     for chunk in pd.read_csv(input_file, chunksize=chunk_size):
         print("Normalizing chunk...")
+
+        chunk = fillnanvalues(chunk)
 
         chunk = normalize_categoricals(chunk)
         chunk = normalize_nums(chunk)
