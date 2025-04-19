@@ -1,7 +1,7 @@
 import argparse
 import pandas as pd
 import numpy as np
-from sklearn.preprocessing import MinMaxScaler
+import json
 
 
 def correct_effect_value(x):
@@ -51,8 +51,23 @@ def normalize_categoricals(df):
 
 
 def normalize_nums(df):
-    df["x"] = df["x"] / 512
-    df["y"] = df["y"] / 385
+    upper_x = 512
+    upper_y = 385
+    path_x_columns = [
+        col
+        for col in df.columns
+        if col.startswith("path_") and int(col.split("_")[1]) % 2 != 0
+    ]
+    path_y_columns = [
+        col
+        for col in df.columns
+        if col.startswith("path_") and int(col.split("_")[1]) % 2 == 0
+    ]
+    df[path_x_columns] = df[path_x_columns].clip(lower=0, upper=upper_x)
+    df[path_y_columns] = df[path_y_columns].clip(lower=0, upper=upper_y)
+
+    df["x"] = df["x"] / upper_x
+    df["y"] = df["y"] / upper_y
     df["volume"] = df["volume"] / 100
     df["slider_velocity"] = df["slider_velocity"] * -1
     return df
@@ -68,36 +83,12 @@ def normalize_log(df):
     return df
 
 
-def normalize_audio(df):
-    scaler = MinMaxScaler(feature_range=(0, 1))
-    df["rms"] = scaler.fit_transform(df[["rms"]])
-
+def normalize_audio(df, stats):
+    mean = np.array(stats["mean"])
+    std = np.array(stats["std"])
     mfcc_columns = [col for col in df.columns if col.startswith("mfcc")]
-    global_max = np.abs(df[mfcc_columns].values).max()
-    df[mfcc_columns] = df[mfcc_columns] / global_max
+    df[mfcc_columns] = (df[mfcc_columns] - mean) / std
 
-    return df
-
-
-def normalize_paths(df):
-    df = df.fillna(0)
-
-    path_x_columns = [
-        col
-        for col in df.columns
-        if col.startswith("path_") and int(col.split("_")[1]) % 2 != 0
-    ]
-    path_y_columns = [
-        col
-        for col in df.columns
-        if col.startswith("path_") and int(col.split("_")[1]) % 2 == 0
-    ]
-
-    global_max = np.abs(df[path_x_columns].values).max()
-    df[path_x_columns] = df[path_x_columns] / global_max
-
-    global_max = np.abs(df[path_y_columns].values).max()
-    df[path_y_columns] = df[path_y_columns] / global_max
     return df
 
 
@@ -131,8 +122,10 @@ def fillnanvalues(df):
     return df
 
 
-def normalize(input_file, output_file, chunk_size=4000000):
+def normalize(input_file, output_file, mfcc_parameters, chunk_size=4000000):
     first_chunk = True
+    with open(mfcc_parameters, "r") as f:
+        stats = json.load(f)
 
     for chunk in pd.read_csv(input_file, chunksize=chunk_size):
         print("Normalizing chunk...")
@@ -142,8 +135,7 @@ def normalize(input_file, output_file, chunk_size=4000000):
         chunk = normalize_categoricals(chunk)
         chunk = normalize_nums(chunk)
         chunk = normalize_log(chunk)
-        chunk = normalize_audio(chunk)
-        chunk = normalize_paths(chunk)
+        chunk = normalize_audio(chunk, stats)
 
         chunk.to_csv(output_file, mode="a", index=False, header=first_chunk)
         first_chunk = False
@@ -163,9 +155,11 @@ def main():
         required=True,
     )
 
+    parser.add_argument("--mfcc_parameters", required=True)
+
     args = parser.parse_args()
 
-    normalize(args.input_file, args.output_file)
+    normalize(args.input_file, args.output_file, args.mfcc_parameters)
 
 
 if __name__ == "__main__":

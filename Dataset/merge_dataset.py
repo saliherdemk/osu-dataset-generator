@@ -1,19 +1,18 @@
-import os
 import argparse
 import pandas as pd
 
 
 def merge_datasets(file_one, file_two, output_file):
-    df_one = pd.read_csv(file_one)
-    df_two = pd.read_csv(file_two)
+    df_one = pd.read_csv(file_one, chunksize=500000)
+    df_two = pd.read_csv(file_two, chunksize=500000)
 
-    new_rows = df_two[~df_two["id"].isin(df_one["id"])]
-    merged = pd.concat([df_one, new_rows], ignore_index=True)
-    merged["unique_id"] = range(len(merged))
+    is_first = True
+    for chunk in df_one:
+        chunk.to_csv(output_file, mode="a", header=is_first, index=False)
+        is_first = False
 
-    merged.to_csv(output_file, index=False)
-
-    print("Merged file saved on", output_file)
+    for chunk in df_two:
+        chunk.to_csv(output_file, mode="a", header=is_first, index=False)
 
 
 def main():

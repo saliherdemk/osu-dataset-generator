@@ -229,14 +229,18 @@ class Formatter:
         return final_df
 
     def format_dataset(self):
-        unique_ids = set()
-        chunks = pd.read_csv(
-            self.checkpoint_file, usecols=["beatmap_id"], chunksize=10000
-        )
+        # unique_ids = set()
+        # chunks = pd.read_csv(
+        #     self.checkpoint_file, usecols=["beatmap_id"], chunksize=500000
+        # )
+        #
+        # for chunk in chunks:
+        #     unique_ids.update(str(id) for id in chunk["beatmap_id"].unique())
+        #     del chunk
 
-        for chunk in chunks:
-            unique_ids.update(str(id) for id in chunk["beatmap_id"].unique())
-            del chunk
+        with open("/mnt/L-HDD/Downloads/processed.txt", "r") as f:
+            unique_ids = [line.strip() for line in f]
+        unique_ids = set(unique_ids)
 
         songs_ids = os.listdir(self.audio_path)
         songs_full_paths = {
@@ -249,17 +253,24 @@ class Formatter:
             if song_id not in unique_ids
         }
 
-        with ProcessPoolExecutor(max_workers=os.cpu_count()) as executor:
-            futures = {
-                executor.submit(self.process_song, song_id, song_path): song_id
-                for song_id, song_path in songs_full_paths.items()
-            }
+        for song_id, song_path in tqdm(songs_full_paths.items()):
+            try:
+                df = self.process_song(song_id, song_path)
+                df.to_csv(self.checkpoint_file, mode="a", header=False, index=False)
+            except Exception as e:
+                print(e)
 
-            for future in tqdm(as_completed(futures), total=len(futures)):
-                final_df = future.result()
-                final_df.to_csv(
-                    self.checkpoint_file, mode="a", header=False, index=False
-                )
+        # with ProcessPoolExecutor(max_workers=os.cpu_count() // 2) as executor:
+        #     futures = {
+        #         executor.submit(self.process_song, song_id, song_path): song_id
+        #         for song_id, song_path in songs_full_paths.items()
+        #     }
+        #
+        #     for future in tqdm(as_completed(futures), total=len(futures)):
+        #         final_df = future.result()
+        #         final_df.to_csv(
+        #             self.checkpoint_file, mode="a", header=False, index=False
+        #         )
 
 
 def main():
