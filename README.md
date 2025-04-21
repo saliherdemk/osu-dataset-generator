@@ -1,19 +1,22 @@
+# Osu Dataset Generator
+This repository processes beatmaps from the rhythm game called [osu!](https://osu.ppy.sh/). It analyzes, processes, reformats, and normalizes both audio and hit objects.The final dataset will serve as training data for an osu! AI beatmap generator. The goal is to create an AI that can generate proper beatmaps from just an mp3 file, supporting a variety of difficulty levels. 
+
 # Dataset Pipeline
 
-Download your current beatmapset using [this](https://github.com/saliherdemk/osu-lazer-backup) tool. Now you have .osz files for your beatmapsets.
+Download your current beatmapset using [this](https://github.com/saliherdemk/osu-lazer-backup) tool. This will give you `.osz` files for your beatmapsets. 
 
 Use `extract_osz.py` to unzip them.
 
 
 ```
-python Dataset/pipeline/extract_osz.py --input_folder=/home/saliherdemk/songs --output_folder=/home/saliherdemk/extracted
+python Dataset/pipeline/extract_osz.py --input_folder=/your_path/songs --output_folder=/your_path/extracted
 ```
 
 Now you have .osu file and corresponding audio file for every beatmap that you own. Use `generate_dataset.py` script to generate your dataset.
 
 
 ```
-python Dataset/pipeline/generate_dataset.py --input_folder=/home/saliherdemk/extracted --dataset_path=/home/saliherdemk/dataset
+python Dataset/pipeline/generate_dataset.py --input_folder=/your_path/extracted --dataset_path=/your_path/dataset
 ```
 
 That will generate 3 files and one folder.
@@ -22,20 +25,24 @@ That will generate 3 files and one folder.
 
 Next, retrieve beatmap metadata and add it to the dataset. For this, you need an OAuth key from osu. Get your client id and client secret, then paste them into a `.env` file, which you will create in the base folder.
 
+```
+CLIENT_ID=your_id
+CLIENT_SECRET=your_secret
+```
  
 ```
-python Dataset/pipeline/add_beatmaps_metadata.py --dataset_folder=/home/saliherdemk/dataset
+python Dataset/pipeline/add_beatmaps_metadata.py --dataset_folder=/your_path/dataset
 ```
 
 Filter ranked maps and remove old maps. (ie > 2010) 
 ```
-python Dataset/pipeline/filter_ranked.py --dataset_folder=/home/saliherdemk/dataset
+python Dataset/pipeline/filter_ranked.py --dataset_folder=/your_path/dataset
 ```
 
 Some of the audio files might be corrupted or not ready for processing. Fix those.
 
 ```
-python Dataset/pipeline/fix_corrupted_audio.py --dataset_folder=/home/saliherdemk/dataset
+python Dataset/pipeline/fix_corrupted_audio.py --dataset_folder=/your_path/dataset
 ```
 
 # Run Pipeline
@@ -46,9 +53,8 @@ chmod +x /Dataset/run_pipeline.sh
 ```
 
 ```
-./Dataset/run_pipeline.sh /mnt/L-HDD/songs /mnt/L-HDD/dataset /mnt/L-HDD/temp/
+./Dataset/run_pipeline.sh /your_path/songs /your_path/dataset /your_path/temp/
 ```
-
 
 
 # Reformatting
@@ -86,7 +92,7 @@ For each row, we need `beat_length`, `meter`, `slider_velocity`, `sample_set`, `
 values. Also we need the corresponding `MFCC` and `RMS` values for that time which we will extract from the audio file.
 
 ```
-python Dataset/format_dataset.py --dataset_path=/mnt/L-HDD/dataset
+python Dataset/format_dataset.py --dataset_path=/your_path/dataset
 ```
 
 Now you should have your `formatted.csv` file on your dataset folder.
@@ -99,25 +105,15 @@ Now you should have your `formatted.csv` file on your dataset folder.
 |2337169-0|11609           |slider|387|0  |0        |P&#124;359:12&#124;329:45|1     |58.4999973220826|0           |False    |2337169   |689.655172413793|4    |-76.9230769230769|2         |60    |0      |4.42             |11598.3673469388|0.18942297 |True          |-75.53014 |57.45023|30.394821 |44.164585 |10.207699|30.548073 |10.782623|13.519032 |-0.89644486|-1.6839523|-16.745308|-3.2124329|1.0503346|9.376907 |4.470006 |-0.87697923|-11.741819|3.6686616  |-0.110064745|-1.6746883|
 |2337169-0|11609.977324263 |      |   |   |         |       |      |                |            |         |2337169   |                |     |                 |          |      |       |                 |11609.977324263 |0.19190039 |False         |-75.5213  |60.621395|31.747063 |42.687218 |10.75659 |31.396027 |10.988749|12.916475 |-0.25296926|-3.476209 |-17.38247 |-1.6582112|0.01946672|7.639636 |2.4652402|-2.2092977|-10.815493|3.794812   |-0.7236271|-2.1331735|
 
+> **Warning:** If you have 16GB of memory or less, you might not be able to process large datasets. The `format_dataset` script includes a checkpoint system that automatically recovers progress from a specified folder. However, if you expect your processing to be interrupted multiple times, I recommend manually creating a `processed.txt` file that contains the processed `beatmap_id`s, and uncommenting the related code block in the `format_dataset` function. That would be much faster since you can use the same processed file over and over again. You can refer to the `notebooks/processed.ipynb` notebook for guidance. An alternative approach is to split your dataset into multiple parts (see `notebooks/split_dataset.ipynb`) and merge them after processing.
 
 
-
-Some of the beatmaps may not be processed properly. If you ensure that you try to process all of the rows, you can remove the remaining ones with the clear flag.
+## Split Curve Points Into Columns
+Since we stored our curve points as string in one cell. We need to spread across to new columns.
 
 
 ```
-python Dataset/format_dataset.py --dataset_path=/mnt/L-HDD/dataset --clear
-```
-This will ensure that dataset is not contains any not-processed row.
-
-
-## Split MFCC and Curve Points Into Columns
-Since we stored our MFCC's and curve points as string in one cell. We need to spread across to new columns.
-
-> **Warning** If you have 16GB of memory or less, you might not be able to process large datasets. Consider splitting your dataset into multiple parts (see `notebooks/split_dataset.ipynb`) and merging them after processing, or use chunks. 
-
-```
-python Dataset/split_to_columns.py --input_file=/mnt/L-HDD/dataset/dataset.csv --output_file=/mnt/L-HDD/dataset/splitted_dataset.csv
+python Dataset/split_to_columns.py --input_file=/your_path/dataset/formatted.csv --output_file=/your_path/dataset/splitted.csv
 ```
 
 Notice that both arguments take file path.
@@ -127,13 +123,13 @@ Notice that both arguments take file path.
 Before normalization, we need to get the mfcc mean and std.
 
 ```
-python Dataset/get_mfcc_parameters.py --file=/mnt/L-HDD/dataset/splitted_dataset.csv --output_file=/mnt/L-HDD/dataset/mfcc.json 
+python Dataset/get_mfcc_parameters.py --file=/your_path/dataset/splitted.csv --output_file=/your_path/dataset/mfcc.json 
 ```
 
 Notice that output file is a json file. Do not delete this file. We need for denormalization step.
 
 ```
-python Dataset/normalize.py --input_file=/mnt/L-HDD/dataset/splitted_dataset.csv --output_file=/mnt/L-HDD/dataset/normalized.csv --mfcc_parameters=/mnt/L-HDD/try_dataset/mfcc.json
+python Dataset/normalize.py --input_file=/your_path/dataset/splitted.csv --output_file=/your_path/dataset/normalized.csv --mfcc_parameters=/your_path/dataset/mfcc.json
 ```
 
 You can find out more about normalization in `notebooks/normalize.ipynb` 
@@ -145,10 +141,10 @@ Here is the final dataset format:
 If you collect more data later, you can merge datasets. After processing your second dataset, merge it with `merge_datasets.py`
 
 ```
-python Dataset/merge_datasets.py --file_one=/mnt/L-HDD/dataset1.csv --file_two=/mnt/L-HDD/dataset2.csv --output_file=/mnt/L-HDD/merged.csv
+python Dataset/merge_datasets.py --file_one=/your_path/dataset1.csv --file_two=/your_path/dataset2.csv --output_file=/your_path/merged.csv
 ```
 
-It will filter the beatmaps based on the id column and add the beatmaps from the second dataset that are not present in the first.
+This script assumes your files don’t have any overlapping records. It just adds the rows one after another. Be aware that it does not check for duplicate rows.
 
 
 ## Final Data Format

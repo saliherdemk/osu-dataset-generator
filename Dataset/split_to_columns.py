@@ -51,7 +51,7 @@ def parse_splitted(df):
     return pd.concat([df, path_df], axis=1)
 
 
-def split_to_columns(input_file, output_file, chunk_size=1000):
+def split_to_columns(input_file, output_file, chunk_size=10000):
     reader = pd.read_csv(input_file, chunksize=chunk_size)
     first_chunk = True
 
