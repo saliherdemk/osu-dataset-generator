@@ -26,7 +26,7 @@ def normalize_categoricals(df):
     ]
 
     expected_types = [f"type_{i}" for i in ["circle", "slient", "slider", "spinner"]]
-    expected_hitsounds = [f"hit_sound_{i}" for i in range(0, 16, 2)]
+    expected_hitsounds = [f"hit_sound_{i}.0" for i in range(0, 16, 2)]
     expected_sample_set = [f"sample_set_{i}.0" for i in range(4)]
     expected_effects = [f"effects_{i}.0" for i in range(2)]
     expected_curve_types = [f"curve_type_{i}" for i in ["B", "E", "L", "P"]]
@@ -122,6 +122,14 @@ def fillnanvalues(df):
     return df
 
 
+def normalize_times(df):
+    margin = -11.61
+
+    df["delta_time"] = (df["frame_time"] - df["time"]) / margin
+    df = df.drop(columns=["frame_time", "time", "beatmap_id"])
+    return df
+
+
 def normalize(input_file, output_file, mfcc_parameters, chunk_size=4000000):
     first_chunk = True
     with open(mfcc_parameters, "r") as f:
@@ -129,6 +137,8 @@ def normalize(input_file, output_file, mfcc_parameters, chunk_size=4000000):
 
     for chunk in pd.read_csv(input_file, chunksize=chunk_size):
         print("Normalizing chunk...")
+
+        chunk = normalize_times(chunk)
 
         chunk = fillnanvalues(chunk)
 
