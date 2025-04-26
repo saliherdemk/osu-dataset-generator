@@ -4,7 +4,7 @@ import pandas as pd
 import shutil
 
 
-def filter_ranked_maps(dataset_folder):
+def filter_ranked_maps(dataset_folder, ranked_date, exclude):
 
     beatmaps_csv = os.path.join(dataset_folder, "beatmaps.csv")
     hit_objects_csv = os.path.join(dataset_folder, "hit_objects.csv")
@@ -18,7 +18,12 @@ def filter_ranked_maps(dataset_folder):
         (beatmaps_df["status"] == "ranked") | (beatmaps_df["status"] == "approved")
     ]
 
-    filtered_beatmaps_df = beatmaps_df[beatmaps_df["ranked_date"] > "2011-01-01"]
+    exclude = [int(x) for x in exclude.split(",")]
+
+    filtered_beatmaps_df = beatmaps_df[
+        (beatmaps_df["ranked_date"] > ranked_date)
+        & (~beatmaps_df["difficulty_rating"].astype(int).isin(exclude))
+    ]
     filtered_ids = filtered_beatmaps_df["id"]
 
     filtered_hit_objects_df = hit_objects_df[hit_objects_df["id"].isin(filtered_ids)]
@@ -52,9 +57,13 @@ def main():
         help="Path to the folder containing dataset folders.",
     )
 
+    parser.add_argument("--min_ranked_date", required=False, default="2011-01-01")
+
+    parser.add_argument("--excluded_diffs", required=False, default="0,8,9,10,11,12")
+
     args = parser.parse_args()
 
-    filter_ranked_maps(args.dataset_folder)
+    filter_ranked_maps(args.dataset_folder, args.min_ranked_date, args.excluded_diffs)
 
 
 if __name__ == "__main__":

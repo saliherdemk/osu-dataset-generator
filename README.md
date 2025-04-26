@@ -54,6 +54,10 @@ Filter ranked maps and remove old maps. (ie > 2010)
 ```
 python Dataset/pipeline/filter_ranked.py --dataset_folder=/your_path/dataset
 ```
+If you have tons of betamaps you might wanna filter more strategically.
+```
+python Dataset/pipeline/filter_ranked.py --dataset/folder=/mnt/L-HDD/Public/ranked --min_ranked_date=2015-01-01 --excluded_diffs=0,8,9,10,11,12
+```
 
 Some of the audio files might be corrupted or not ready for processing. Fix those.
 
