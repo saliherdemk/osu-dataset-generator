@@ -6,6 +6,31 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from tqdm import tqdm
 import librosa
 
+final_columns = [
+    "id",
+    "time",
+    "type",
+    "x",
+    "y",
+    "hit_sound",
+    "path",
+    "repeat",
+    "slider_time",
+    "spinner_time",
+    "new_combo",
+    "beatmap_id",
+    "beat_length",
+    "meter",
+    "slider_velocity",
+    "sample_set",
+    "volume",
+    "effects",
+    "difficulty_rating",
+    "frame_time",
+    "rms",
+    "has_hit_object",
+] + [f"mfcc_{i}" for i in range(1, 21)]
+
 
 class Formatter:
     def __init__(self, dataset_path) -> None:
@@ -24,34 +49,7 @@ class Formatter:
         checkpoint_file = os.path.join(dataset_path, "formatted.csv")
 
         if not os.path.exists(checkpoint_file):
-            columns = [
-                "id",
-                "time",
-                "type",
-                "x",
-                "y",
-                "hit_sound",
-                "path",
-                "repeat",
-                "length",
-                "spinner_time",
-                "new_combo",
-                "beatmap_id",
-                "beat_length",
-                "meter",
-                "slider_velocity",
-                "sample_set",
-                "volume",
-                "effects",
-                "difficulty_rating",
-                "frame_time",
-                "rms",
-                "has_hit_object",
-            ]
-            mfcc_columns = [f"mfcc_{i}" for i in range(1, 21)]
-
-            df_template = pd.DataFrame(columns=columns + mfcc_columns)
-
+            df_template = pd.DataFrame(columns=final_columns)
             df_template.to_csv(checkpoint_file, index=False)
 
         return checkpoint_file
@@ -113,9 +111,13 @@ class Formatter:
             beat_length = latest_uninherited["beat_length"]
             meter = latest_uninherited["meter"]
             slider_velocity = (
-                latest_inherited["beat_length"]
-                if latest_inherited is not None
-                else -100 * base_velocity
+                base_velocity
+                * abs(
+                    latest_inherited["beat_length"]
+                    if latest_inherited is not None
+                    else -100
+                )
+                / 100
             )
             sample_set = (
                 latest_inherited["sample_set"] if latest_inherited is not None else 1
@@ -150,6 +152,12 @@ class Formatter:
         beatmaps = beatmaps.reset_index(drop=True)
         beatmaps = pd.concat([beatmaps, timing_df], axis=1)
 
+        beatmaps["slider_time"] = (
+            beatmaps["length"] / (beatmaps["slider_velocity"] * 100)
+        ) * beatmaps["beat_length"]
+
+        beatmaps.drop(columns="length", inplace=True)
+
         y, sr = librosa.load(song_path)  # sr=22050
         hop_length = 256
         mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=20, hop_length=hop_length)
@@ -162,16 +170,21 @@ class Formatter:
         for seq_id, group in beatmaps.groupby("id"):
             group = group.copy()
 
-            time_array = group["time"] / 1000
-            frame_indices = librosa.time_to_frames(
-                time_array, sr=sr, hop_length=hop_length
-            )  # frames[i] = floor( times[i] * sr / hop_length )
+            n_frames = int(np.ceil(len(y) / hop_length))
+
             frame_times = librosa.frames_to_time(
-                frame_indices, sr=sr, hop_length=hop_length
+                np.arange(n_frames), sr=sr, hop_length=hop_length
             )
 
+            time_array = group["time"] / 1000
+            frame_indices = []
+            for time in time_array:
+                distances = np.abs(frame_times - time)
+                closest_frame_index = np.argmin(distances)
+                frame_indices.append(closest_frame_index)
+
             group = group.reset_index(drop=True)
-            group["frame_time"] = frame_times * 1000
+            group["frame_time"] = frame_times[frame_indices] * 1000
             group["mfcc"] = [mfcc[:, f] for f in frame_indices]
             group["rms"] = [rms[0][f] for f in frame_indices]
             group["has_hit_object"] = True
@@ -186,6 +199,8 @@ class Formatter:
             for f in missing_frames:
                 row = {
                     "id": seq_id,
+                    "type": "slient",
+                    "new_combo": False,
                     "beatmap_id": int(song_id),
                     "time": librosa.frames_to_time(f, sr=sr, hop_length=hop_length)
                     * 1000,
@@ -206,25 +221,26 @@ class Formatter:
         final_df = pd.concat(all_rows, ignore_index=True)
         final_df = final_df.sort_values(["id", "time"]).reset_index(drop=True)
 
-        hit_times = (
-            final_df[final_df["has_hit_object"]]
-            .groupby("id")["time"]
-            .agg(["first", "last"])
-        )
+        # hit_times = (
+        #     final_df[final_df["has_hit_object"]]
+        #     .groupby("id")["time"]
+        #     .agg(["first", "last"])
+        # )
 
-        final_df = (
-            final_df.groupby("id", group_keys=False)[final_df.columns.tolist()]
-            .apply(
-                lambda group: group[
-                    group["has_hit_object"]
-                    | (
-                        (group["time"] >= hit_times.loc[group.name, "first"])
-                        & (group["time"] <= hit_times.loc[group.name, "last"])
-                    )
-                ]
-            )
-            .reset_index(drop=True)
-        )
+        # final_df = (
+        #     final_df.groupby("id", group_keys=False)[final_df.columns.tolist()]
+        #     .apply(
+        #         lambda group: group[
+        #             group["has_hit_object"]
+        #             | (
+        #                 (group["time"] >= hit_times.loc[group.name, "first"])
+        #                 & (group["time"] <= hit_times.loc[group.name, "last"])
+        #             )
+        #         ]
+        #     )
+        #     .reset_index(drop=True)
+        # )
+        final_df = final_df[final_columns]
         return final_df
 
     def format_dataset(self):

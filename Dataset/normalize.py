@@ -31,7 +31,7 @@ def normalize_categoricals(df):
     expected_effects = [f"effects_{i}.0" for i in range(2)]
     expected_curve_types = [f"curve_type_{i}" for i in ["B", "E", "L", "P"]]
     expected_new_combos = [f"new_combo_{i}" for i in range(2)]
-    expected_difficulty_rating = [f"difficulty_rating_{i}" for i in range(13)]
+    expected_difficulty_rating = [f"difficulty_rating_{i}" for i in range(1, 8)]
 
     expected_columns = (
         expected_types
@@ -66,16 +66,18 @@ def normalize_nums(df):
     df[path_x_columns] = df[path_x_columns].clip(lower=0, upper=upper_x)
     df[path_y_columns] = df[path_y_columns].clip(lower=0, upper=upper_y)
 
+    df[path_x_columns] = df[path_x_columns] / upper_x
+    df[path_y_columns] = df[path_y_columns] / upper_y
+
     df["x"] = df["x"] / upper_x
     df["y"] = df["y"] / upper_y
     df["volume"] = df["volume"] / 100
-    df["slider_velocity"] = df["slider_velocity"] * -1
     return df
 
 
 def normalize_log(df):
     df["repeat"] = np.log1p(df["repeat"])
-    df["length"] = np.log1p(df["length"])
+    df["slider_time"] = np.log1p(df["slider_time"])
     df["spinner_time"] = np.log1p(df["spinner_time"])
     df["beat_length"] = np.log1p(df["beat_length"])
     df["meter"] = np.log1p(df["meter"])
@@ -99,7 +101,7 @@ def set_column_dtypes(df):
     bools = ["new_combo", "has_hit_object"]
     df[bools] = df[bools].astype(bool)
 
-    ints = ["beatmap_id", "spinner_time"]
+    ints = ["spinner_time"]
     df[ints] = df[ints].astype("int64")
 
     floats = [col for col in df.columns if col not in strings + bools + ints]
