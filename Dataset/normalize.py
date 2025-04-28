@@ -30,7 +30,7 @@ def normalize_categoricals(df):
     expected_sample_set = [f"sample_set_{i}.0" for i in range(4)]
     expected_effects = [f"effects_{i}.0" for i in range(2)]
     expected_curve_types = [f"curve_type_{i}" for i in ["B", "E", "L", "P"]]
-    expected_new_combos = [f"new_combo_{i}" for i in range(2)]
+    expected_new_combos = [f"new_combo_{i}" for i in ["True", "False"]]
     expected_difficulty_rating = [f"difficulty_rating_{i}" for i in range(1, 8)]
 
     expected_columns = (

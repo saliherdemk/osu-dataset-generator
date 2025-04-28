@@ -110,15 +110,28 @@ class Formatter:
 
             beat_length = latest_uninherited["beat_length"]
             meter = latest_uninherited["meter"]
-            slider_velocity = (
-                base_velocity
-                * abs(
-                    latest_inherited["beat_length"]
-                    if latest_inherited is not None
-                    else -100
-                )
-                / 100
+            # slider_velocity = (
+            #     base_velocity
+            #     * abs(
+            #         latest_inherited["beat_length"]
+            #         if latest_inherited is not None
+            #         else -100
+            #     )
+            #     / 100
+            # )
+            slider_velocity = base_velocity * (
+                -100 / latest_inherited["beat_length"]
+                if latest_inherited is not None
+                else -100
             )
+            slider_velocity = round(slider_velocity, 2)
+            print(
+                beat_length,
+                latest_inherited["beat_length"],
+                base_velocity,
+                slider_velocity,
+            )
+
             sample_set = (
                 latest_inherited["sample_set"] if latest_inherited is not None else 1
             )

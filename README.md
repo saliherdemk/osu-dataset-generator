@@ -193,3 +193,23 @@ After getting the model output, denormalize it.
 ```
 python Dataset/denormalize.py --input_file=/your_path/normalized.csv --output_file=/your_path/denormalized.csv --audio_path=/your_path/audio.mp3 
 ```
+
+## Generate .osu file
+
+```
+python Dataset/generate_file.py --input_file=/your_path/denormalized.csv --output_file=/your_path/song.osu
+```
+This will create an `.osu` file with the following default parameters:
+
+```
+osu file format v14
+
+[General]
+AudioFilename: audio.mp3
+
+[Difficulty]
+SliderMultiplier:1
+SliderTickRate:2
+```
+
+Since slider velocities are relative to SliderMultiplier = 1, do not change this value. You can tweak the other values if you want.
