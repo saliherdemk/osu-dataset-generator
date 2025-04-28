@@ -187,3 +187,9 @@ This script assumes your files don’t have any overlapping records. It just add
 |2338303-0|Shinsekai Koukyougaku|Sayonara Ponytail     |SUISEI69|Insane     |5            |4          |7                 |8            |1.64             |2               |['2,89075,92291', '2,198241,210625']|ranked|2025-03-23 17:05:50+00:00|4.25             |2338303   |
 |2340739-0|LEMON MELON COOKIE   |TAK feat. Hatsune Miku|Andrea  |Amats' Hard|4            |3.4        |6.5               |7.5          |1.4              |1               |['2,35196,38171']                   |ranked|2025-03-25 00:43:22+00:00|3.53             |2340739   |
 
+## Denormalize
+
+After getting the model output, denormalize it.
+```
+python Dataset/denormalize.py --input_file=/your_path/normalized.csv --output_file=/your_path/denormalized.csv --audio_path=/your_path/audio.mp3 
+```
