@@ -30,6 +30,8 @@ def prepare(df):
     last_true_idx = df.index[~df["type_slient"]][-1]
     filtered = df.loc[first_true_idx:last_true_idx]
 
+    filtered = filtered.copy()
+
     filtered["slider_length"] = (
         (filtered["slider_time"] / filtered["beat_length"])
         * filtered["slider_velocity"]
@@ -43,7 +45,7 @@ def prepare(df):
         "sample_set_3.0",
     ]
     filtered["sample_set"] = (
-        filtered[sample_set_cols].idxmax(axis=1).str.extract("(\d+)")
+        filtered[sample_set_cols].idxmax(axis=1).str.extract(r"(\d+)")
     )
     return filtered
 
@@ -121,6 +123,8 @@ def hit_objects_prepare(df):
         for col in df.columns
         if col.startswith("path_") and int(col.split("_")[1]) % 2 == 0
     ]
+    hit_filtered = hit_filtered.copy()
+
     hit_filtered["hit_sound"] = (
         parse(hit_filtered[hit_sound_cols]).astype(float).astype(int)
     )
@@ -152,7 +156,7 @@ def hit_objects_prepare(df):
 
 
 def rounded_str(x):
-    return str(int(x))
+    return str(round(x))
 
 
 def remove_trailing_zeros(data):
@@ -239,6 +243,7 @@ def generate_file(input_file, output_file):
     hit_objects = get_hit_objects(hit_objects_df)
 
     save_file(timing_points, hit_objects, output_file)
+    print(f"File saved as {output_file}")
 
 
 def main():

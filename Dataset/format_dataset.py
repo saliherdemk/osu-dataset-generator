@@ -110,27 +110,12 @@ class Formatter:
 
             beat_length = latest_uninherited["beat_length"]
             meter = latest_uninherited["meter"]
-            # slider_velocity = (
-            #     base_velocity
-            #     * abs(
-            #         latest_inherited["beat_length"]
-            #         if latest_inherited is not None
-            #         else -100
-            #     )
-            #     / 100
-            # )
             slider_velocity = base_velocity * (
                 -100 / latest_inherited["beat_length"]
                 if latest_inherited is not None
-                else -100
+                else 1
             )
             slider_velocity = round(slider_velocity, 2)
-            print(
-                beat_length,
-                latest_inherited["beat_length"],
-                base_velocity,
-                slider_velocity,
-            )
 
             sample_set = (
                 latest_inherited["sample_set"] if latest_inherited is not None else 1
@@ -234,25 +219,6 @@ class Formatter:
         final_df = pd.concat(all_rows, ignore_index=True)
         final_df = final_df.sort_values(["id", "time"]).reset_index(drop=True)
 
-        # hit_times = (
-        #     final_df[final_df["has_hit_object"]]
-        #     .groupby("id")["time"]
-        #     .agg(["first", "last"])
-        # )
-
-        # final_df = (
-        #     final_df.groupby("id", group_keys=False)[final_df.columns.tolist()]
-        #     .apply(
-        #         lambda group: group[
-        #             group["has_hit_object"]
-        #             | (
-        #                 (group["time"] >= hit_times.loc[group.name, "first"])
-        #                 & (group["time"] <= hit_times.loc[group.name, "last"])
-        #             )
-        #         ]
-        #     )
-        #     .reset_index(drop=True)
-        # )
         final_df = final_df[final_columns]
         return final_df
 

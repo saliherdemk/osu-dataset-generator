@@ -51,6 +51,32 @@ def parse_splitted(df):
     return pd.concat([df, path_df], axis=1)
 
 
+def slience_long_paths(chunk):
+    mask = (chunk["path"].apply(lambda x: len(x) > 25)) | (chunk["curve_type"] == "C")
+    nan_cols = [
+        "x",
+        "y",
+        "hit_sound",
+        "repeat",
+        "slider_time",
+        "spinner_time",
+        "beat_length",
+        "meter",
+        "slider_velocity",
+        "sample_set",
+        "volume",
+        "effects",
+        "difficulty_rating",
+    ]
+    false_cols = ["new_combo", "has_hit_object"]
+
+    chunk.loc[mask, "path"] = chunk.loc[mask, "path"].apply(lambda _: [])
+    chunk.loc[mask, "type"] = "slient"
+    chunk.loc[mask, nan_cols] = np.nan
+    chunk.loc[mask, false_cols] = False
+    return chunk
+
+
 def split_to_columns(input_file, output_file, chunk_size=10000):
     reader = pd.read_csv(input_file, chunksize=chunk_size)
     first_chunk = True
@@ -58,9 +84,8 @@ def split_to_columns(input_file, output_file, chunk_size=10000):
     for chunk in reader:
 
         chunk = chunk.apply(parse_path, axis=1)
-        chunk = chunk[
-            (chunk["path"].apply(lambda x: len(x) <= 25)) & (chunk["curve_type"] != "C")
-        ]
+        chunk = slience_long_paths(chunk)
+
         chunk = parse_splitted(chunk)
         chunk.drop(columns=["path"], axis=1, inplace=True)
 
