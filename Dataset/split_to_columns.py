@@ -69,7 +69,9 @@ def slience_long_paths(chunk):
         "difficulty_rating",
     ]
     false_cols = ["new_combo", "has_hit_object"]
+    zeros_cols = ["rms"] + [f"mfcc_{i}" for i in range(1, 21)]
 
+    chunk.loc[mask, zeros_cols] = 0
     chunk.loc[mask, "path"] = chunk.loc[mask, "path"].apply(lambda _: [])
     chunk.loc[mask, "type"] = "slient"
     chunk.loc[mask, nan_cols] = np.nan
