@@ -79,7 +79,7 @@ def slience_long_paths(chunk):
     return chunk
 
 
-def split_to_columns(input_file, output_file, chunk_size=10000):
+def split_to_columns(input_file, output_file, chunk_size=600000):
     reader = pd.read_csv(input_file, chunksize=chunk_size)
     first_chunk = True
 
@@ -92,28 +92,17 @@ def split_to_columns(input_file, output_file, chunk_size=10000):
         chunk.drop(columns=["path"], axis=1, inplace=True)
 
         mode = "w" if first_chunk else "a"
-        header = first_chunk
+        header = False
+        if first_chunk:
+            cols = list(chunk.columns)
+            last = int(cols[-1].split("_")[-1])
+            for i in range(last + 1, 51):
+                new_col = f"path_{i}"
+                cols.append(new_col)
+                chunk[new_col] = 0
+            header = cols
         chunk.to_csv(output_file, mode=mode, header=header, index=False)
         first_chunk = False
-
-    fix(output_file)
-
-
-def fix(input_file):
-
-    with open(input_file, "r") as f:
-        reader = csv.reader(f, delimiter=",")
-        rows = list(reader)
-
-    last_column = max(len(row) for row in rows) - len(rows[0])
-    last_path = int(rows[0][-1].split("_")[1])
-
-    headers = rows[0] + [f"path_{last_path + i}" for i in range(1, last_column + 1)]
-    rows[0] = headers
-
-    with open(input_file, "w", newline="") as f:
-        writer = csv.writer(f, delimiter=",")
-        writer.writerows(rows)
 
 
 def main():
