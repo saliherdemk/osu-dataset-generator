@@ -2,6 +2,7 @@ import argparse
 import pandas as pd
 import numpy as np
 import json
+import os
 
 
 def correct_effect_value(x):
@@ -10,7 +11,7 @@ def correct_effect_value(x):
     return 0 if x == 8 else x
 
 
-def normalize_categoricals(df):
+def normalize_categoricals(df, expected_columns):
     df["effects"] = df["effects"].apply(correct_effect_value)
     df["difficulty_rating"] = df["difficulty_rating"].astype(int)
 
@@ -25,28 +26,14 @@ def normalize_categoricals(df):
         "has_hit_object",
     ]
 
-    expected_types = [f"type_{i}" for i in ["circle", "slient", "slider", "spinner"]]
-    expected_hitsounds = [f"hit_sound_{i}.0" for i in range(0, 16, 2)]
-    expected_sample_set = [f"sample_set_{i}.0" for i in range(4)]
-    expected_effects = [f"effects_{i}.0" for i in range(2)]
-    expected_curve_types = [f"curve_type_{i}" for i in ["B", "E", "L", "P"]]
-    expected_new_combos = [f"new_combo_{i}" for i in ["True", "False"]]
-    expected_difficulty_rating = [f"difficulty_rating_{i}" for i in range(1, 8)]
-
-    expected_columns = (
-        expected_types
-        + expected_hitsounds
-        + expected_sample_set
-        + expected_effects
-        + expected_curve_types
-        + expected_new_combos
-        + expected_difficulty_rating
-    )
     df = pd.get_dummies(df, columns=categorical_columns, prefix=categorical_columns)
 
     for col in expected_columns:
         if col not in df.columns:
             df[col] = "False"
+
+    df = df[expected_columns]
+
     return df
 
 
@@ -132,19 +119,21 @@ def normalize_times(df):
     return df
 
 
-def normalize(input_file, output_file, mfcc_parameters, chunk_size=4000000):
+def normalize(input_file, output_file, dataset_metadata, chunk_size=50000):
     first_chunk = True
-    with open(mfcc_parameters, "r") as f:
+
+    with open(os.path.join(dataset_metadata, "mfcc.json"), "r") as f:
         stats = json.load(f)
 
+    with open(os.path.join(dataset_metadata, "dataset_columns.json"), "r") as f:
+        dataset_cols = json.load(f)
+
+    print("Normalizing chunk...")
     for chunk in pd.read_csv(input_file, chunksize=chunk_size):
-        print("Normalizing chunk...")
 
         chunk = normalize_times(chunk)
-
         chunk = fillnanvalues(chunk)
-
-        chunk = normalize_categoricals(chunk)
+        chunk = normalize_categoricals(chunk, dataset_cols)
         chunk = normalize_nums(chunk)
         chunk = normalize_log(chunk)
         chunk = normalize_audio(chunk, stats)
@@ -167,11 +156,11 @@ def main():
         required=True,
     )
 
-    parser.add_argument("--mfcc_parameters", required=True)
+    parser.add_argument("--dataset_metadata", required=True)
 
     args = parser.parse_args()
 
-    normalize(args.input_file, args.output_file, args.mfcc_parameters)
+    normalize(args.input_file, args.output_file, args.dataset_metadata)
 
 
 if __name__ == "__main__":

@@ -38,7 +38,7 @@ echo "Adding beatmap metadata..."
 python Dataset/pipeline/add_beatmaps_metadata.py --dataset_folder="$DATASET_FOLDER"
 
 echo "Filtering ranked beatmaps..."
-python Dataset/pipeline/filter_ranked.py --dataset_folder="$DATASET_FOLDER"
+python Dataset/pipeline/filter_ranked.py --dataset_folder="$DATASET_FOLDER" --min_ranked_date=2017-01-01
 
 echo "Fixing corrupted audio..."
 python Dataset/pipeline/fix_corrupted_audio.py --dataset_folder="$DATASET_FOLDER"

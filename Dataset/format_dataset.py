@@ -168,7 +168,7 @@ class Formatter:
         for seq_id, group in beatmaps.groupby("id"):
             group = group.copy()
 
-            n_frames = int(np.ceil(len(y) / hop_length))
+            n_frames = mfcc.shape[1]
 
             frame_times = librosa.frames_to_time(
                 np.arange(n_frames), sr=sr, hop_length=hop_length
