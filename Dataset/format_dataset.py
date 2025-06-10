@@ -115,7 +115,8 @@ class Formatter:
                 if latest_inherited is not None
                 else 1
             )
-            slider_velocity = round(slider_velocity, 2)
+
+            slider_velocity = round(slider_velocity, 4)
 
             sample_set = (
                 latest_inherited["sample_set"] if latest_inherited is not None else 1
