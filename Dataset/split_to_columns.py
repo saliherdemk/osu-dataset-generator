@@ -2,7 +2,6 @@ import argparse
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
-import csv
 
 
 def parse_path(row):
@@ -19,6 +18,7 @@ def parse_path(row):
 
     row["curve_type"] = curve_type
     row["path"] = path
+
     return row
 
 
@@ -34,7 +34,7 @@ def parse_splitted(df):
         if len(row["path"]) > 0:
             flattened = np.concatenate(row["path"])
         else:
-            flattened = np.array([])
+            flattened = np.array([], dtype=int)
 
         padded = np.pad(
             flattened,
@@ -51,8 +51,12 @@ def parse_splitted(df):
     return pd.concat([df, path_df], axis=1)
 
 
-def slience_long_paths(chunk):
-    mask = (chunk["path"].apply(lambda x: len(x) > 25)) | (chunk["curve_type"] == "C")
+def filter_chunk(chunk):
+    filtered = chunk[
+        (chunk["path"].apply(lambda x: len(x) < 25)) & (chunk["curve_type"] != "C")
+    ]
+
+    return filtered
     nan_cols = [
         "x",
         "y",
@@ -68,7 +72,7 @@ def slience_long_paths(chunk):
         "effects",
         "difficulty_rating",
     ]
-    false_cols = ["new_combo", "has_hit_object"]
+    false_cols = ["new_combo"]
     zeros_cols = ["rms"] + [f"mfcc_{i}" for i in range(1, 21)]
 
     chunk.loc[mask, zeros_cols] = 0
@@ -79,6 +83,10 @@ def slience_long_paths(chunk):
     return chunk
 
 
+def convert_dtypes(chunk):
+    return chunk
+
+
 def split_to_columns(input_file, output_file, chunk_size=600000):
     reader = pd.read_csv(input_file, chunksize=chunk_size)
     first_chunk = True
@@ -86,7 +94,7 @@ def split_to_columns(input_file, output_file, chunk_size=600000):
     for chunk in reader:
 
         chunk = chunk.apply(parse_path, axis=1)
-        chunk = slience_long_paths(chunk)
+        chunk = filter_chunk(chunk)
 
         chunk = parse_splitted(chunk)
         chunk.drop(columns=["path"], axis=1, inplace=True)
@@ -101,6 +109,7 @@ def split_to_columns(input_file, output_file, chunk_size=600000):
                 cols.append(new_col)
                 chunk[new_col] = 0
             header = cols
+        chunk = convert_dtypes(chunk)
         chunk.to_csv(output_file, mode=mode, header=header, index=False)
         first_chunk = False
 

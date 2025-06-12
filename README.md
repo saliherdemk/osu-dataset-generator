@@ -132,6 +132,31 @@ Now you should have your `formatted.csv` file on your dataset folder.
 
 > **Warning:** If you have 16GB of memory or less, you might not be able to process large datasets. The `format_dataset` script includes a checkpoint system that automatically recovers progress from a specified folder. However, if you expect your processing to be interrupted multiple times, I recommend manually creating a `processed.txt` file that contains the processed `beatmap_id`s, and uncommenting the related code block in the `format_dataset` function. That would be much faster since you can use the same processed file over and over again. You can refer to the `notebooks/processed.ipynb` notebook for guidance. An alternative approach is to split your dataset into multiple parts (see `notebooks/split_dataset.ipynb`) and merge them after processing.
 
+| Column Name        | Data Type |
+|--------------------|-----------|
+| id                 | string    |
+| time               | float64   |
+| type               | string    |
+| x                  | int16     |
+| y                  | int16     |
+| hit_sound          | int8      |
+| path               | string    |
+| repeat             | int16     |
+| slider_time        | float64   |
+| spinner_time       | int32     |
+| new_combo          | bool      |
+| beatmap_id         | int64     |
+| beat_length        | float64   |
+| meter              | int8      |
+| slider_velocity    | float64   |
+| sample_set         | int8      |
+| volume             | int8      |
+| effects            | int8      |
+| difficulty_rating  | float16   |
+| frame_time         | float64   |
+| rms                | float64   |
+
+
 
 ## Split Curve Points Into Columns
 Since we stored our curve points as string in one cell. We need to spread across to new columns.

@@ -6,30 +6,32 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from tqdm import tqdm
 import librosa
 
-final_columns = [
-    "id",
-    "time",
-    "type",
-    "x",
-    "y",
-    "hit_sound",
-    "path",
-    "repeat",
-    "slider_time",
-    "spinner_time",
-    "new_combo",
-    "beatmap_id",
-    "beat_length",
-    "meter",
-    "slider_velocity",
-    "sample_set",
-    "volume",
-    "effects",
-    "difficulty_rating",
-    "frame_time",
-    "rms",
-    "has_hit_object",
-] + [f"mfcc_{i}" for i in range(1, 21)]
+col_types = {
+    "id": "string",
+    "time": "float64",
+    "type": "string",
+    "x": "int16",
+    "y": "int16",
+    "hit_sound": "int8",
+    "path": "string",
+    "repeat": "int16",
+    "slider_time": "float64",
+    "spinner_time": "int32",
+    "new_combo": "bool",
+    "beatmap_id": "int64",
+    "beat_length": "float64",
+    "meter": "int8",
+    "slider_velocity": "float64",
+    "sample_set": "int8",
+    "volume": "int8",
+    "effects": "int8",
+    "difficulty_rating": "float16",
+    "frame_time": "float64",
+    "rms": "float64",
+}
+
+for i in range(1, 21):
+    col_types[f"mfcc_{i}"] = "float64"
 
 
 class Formatter:
@@ -49,7 +51,7 @@ class Formatter:
         checkpoint_file = os.path.join(dataset_path, "formatted.csv")
 
         if not os.path.exists(checkpoint_file):
-            df_template = pd.DataFrame(columns=final_columns)
+            df_template = pd.DataFrame(columns=col_types.keys())
             df_template.to_csv(checkpoint_file, index=False)
 
         return checkpoint_file
@@ -168,6 +170,7 @@ class Formatter:
 
         for seq_id, group in beatmaps.groupby("id"):
             group = group.copy()
+            diff_rating = group["difficulty_rating"].iloc[0]
 
             n_frames = mfcc.shape[1]
 
@@ -186,29 +189,41 @@ class Formatter:
             group["frame_time"] = frame_times[frame_indices] * 1000
             group["mfcc"] = [mfcc[:, f] for f in frame_indices]
             group["rms"] = [rms[0][f] for f in frame_indices]
-            group["has_hit_object"] = True
 
             for i in range(mfcc_length):
                 group[f"mfcc_{i+1}"] = group["mfcc"].apply(lambda x: x[i])
             group.drop(columns="mfcc", inplace=True)
 
             missing_frames = [i for i in range(mfcc.shape[1]) if i not in frame_indices]
-
             silent_rows = []
+
             for f in missing_frames:
                 row = {
                     "id": seq_id,
                     "type": "slient",
+                    "x": 0,
+                    "y": 0,
+                    "hit_sound": 0,
+                    "path": "E|",
+                    "repeat": 0,
+                    "slider_time": 0.0,
+                    "spinner_time": 0,
                     "new_combo": False,
                     "beatmap_id": int(song_id),
                     "time": librosa.frames_to_time(f, sr=sr, hop_length=hop_length)
                     * 1000,
+                    "beat_length": 0.0,
+                    "meter": 0,
+                    "slider_velocity": 0.0,
+                    "sample_set": 0,
+                    "volume": 0,
+                    "effects": 0,
+                    "difficulty_rating": diff_rating,
                     "frame_time": librosa.frames_to_time(
                         f, sr=sr, hop_length=hop_length
                     )
                     * 1000,
                     "rms": rms[0][f],
-                    "has_hit_object": False,
                 }
                 for i in range(mfcc_length):
                     row[f"mfcc_{i+1}"] = mfcc[i, f]
@@ -219,9 +234,24 @@ class Formatter:
 
         final_df = pd.concat(all_rows, ignore_index=True)
         final_df = final_df.sort_values(["id", "time"]).reset_index(drop=True)
+        pd.set_option("display.max_columns", None)
 
-        final_df = final_df[final_columns]
+        final_df = final_df[col_types.keys()]
+        final_df = final_df.astype(col_types)
         return final_df
+
+    def fillnans(self, df):
+        values = {"path": ""}
+
+        df = df.fillna(value=values)
+        fill_map = (
+            df[df["difficulty_rating"].notna()]
+            .groupby("id")["difficulty_rating"]
+            .first()
+        )
+        df["difficulty_rating"] = df["id"].map(fill_map)
+        df = df.fillna(0.0)
+        return df
 
     def format_dataset(self):
         unique_ids = set()
@@ -232,10 +262,6 @@ class Formatter:
         for chunk in chunks:
             unique_ids.update(str(id) for id in chunk["beatmap_id"].unique())
             del chunk
-
-        # with open("/mnt/L-HDD/Downloads/processed.txt", "r") as f:
-        #     unique_ids = [line.strip() for line in f]
-        # unique_ids = set(unique_ids)
 
         songs_ids = os.listdir(self.audio_path)
         songs_full_paths = {
@@ -263,6 +289,7 @@ class Formatter:
 
             for future in tqdm(as_completed(futures), total=len(futures)):
                 final_df = future.result()
+                final_df = self.fillnans(final_df)
                 final_df.to_csv(
                     self.checkpoint_file, mode="a", header=False, index=False
                 )

@@ -1,5 +1,5 @@
-import numpy as np
 import os
+import pandas as pd
 
 
 class BeatmapProcessor:
@@ -42,7 +42,7 @@ class BeatmapProcessor:
                 x, y, time, obj_type, hit_sound = map(int, parts[:5])
                 object_data = parts[5:]
                 t = "circle"
-                path = ""
+                path = "E|"
                 spinner_time = 0
                 repeat = 0
                 length = 0

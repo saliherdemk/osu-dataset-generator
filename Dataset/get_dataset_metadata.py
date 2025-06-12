@@ -40,7 +40,6 @@ def write_dataset_columns(difficulty_ratings, max_path, output_file):
     expected_curve_types = [f"curve_type_{i}" for i in ["B", "E", "L", "P"]]
     expected_new_combos = [f"new_combo_{i}" for i in ["True", "False"]]
     expected_difficulty_rating = [f"difficulty_rating_{i}" for i in difficulty_ratings]
-    expected_has_hit_object = [f"has_hit_object_{i}" for i in ["True", "False"]]
 
     expected_columns = (
         columns
@@ -51,8 +50,9 @@ def write_dataset_columns(difficulty_ratings, max_path, output_file):
         + expected_curve_types
         + expected_new_combos
         + expected_difficulty_rating
-        + expected_has_hit_object
     )
+
+    dtypes = ()
 
     with open(output_file, "w") as f:
         json.dump(expected_columns, f)

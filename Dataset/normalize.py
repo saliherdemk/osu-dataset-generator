@@ -23,7 +23,6 @@ def normalize_categoricals(df, expected_columns):
         "curve_type",
         "new_combo",
         "difficulty_rating",
-        "has_hit_object",
     ]
 
     df = pd.get_dummies(df, columns=categorical_columns, prefix=categorical_columns)
@@ -85,7 +84,7 @@ def set_column_dtypes(df):
     strings = ["id", "type", "curve_type"]
     df[strings] = df[strings].astype(str)
 
-    bools = ["new_combo", "has_hit_object"]
+    bools = ["new_combo"]
     df[bools] = df[bools].astype(bool)
 
     ints = ["spinner_time"]
@@ -93,21 +92,6 @@ def set_column_dtypes(df):
 
     floats = [col for col in df.columns if col not in strings + bools + ints]
     df[floats] = df[floats].astype("float64")
-    return df
-
-
-def fillnanvalues(df):
-    values = {"type": "slient", "new_combo": False}
-
-    df = df.fillna(value=values)
-    fill_map = (
-        df[df["difficulty_rating"].notna()].groupby("id")["difficulty_rating"].first()
-    )
-    df["difficulty_rating"] = df["id"].map(fill_map)
-    df = df.fillna(0)
-
-    df = set_column_dtypes(df)
-
     return df
 
 
@@ -132,7 +116,6 @@ def normalize(input_file, output_file, dataset_metadata, chunk_size=50000):
     for chunk in pd.read_csv(input_file, chunksize=chunk_size):
 
         chunk = normalize_times(chunk)
-        chunk = fillnanvalues(chunk)
         chunk = normalize_categoricals(chunk, dataset_cols)
         chunk = normalize_nums(chunk)
         chunk = normalize_log(chunk)
