@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-col_types = {
+COL_TYPES = {
     "id": "string",
     "time": "float64",
     "type": "string",
@@ -16,7 +16,6 @@ col_types = {
     "hit_sound": "int8",
     "path": "string",
     "repeat": "int16",
-    "slider_time": "float64",
     "spinner_time": "int32",
     "new_combo": "bool",
     "slider_velocity": "float64",
@@ -28,89 +27,73 @@ col_types = {
     "beat_length": "float64",
     "mapper_id": "int64",
     "beatmap_id": "int64",
-    "tick": "float64"
+    "tick": "float64",
 }
 
 
 class Formatter:
-    def __init__(self, dataset_path) -> None:
-        beatmap_path = os.path.join(dataset_path, "beatmaps.csv")
-        time_points_path = os.path.join(dataset_path, "timing_points.csv")
-        hit_objects_path = os.path.join(dataset_path, "hit_objects.csv")
-        self.beatmaps_df = pd.read_csv(beatmap_path)
-        self.time_points_df = pd.read_csv(time_points_path)
-        self.hit_objects_df = pd.read_csv(hit_objects_path)
+    def __init__(self, dataset_path):
+        self.dataset_path = dataset_path
 
-        self.mel_folder, self.checkpoint_file = self.get_output_folder(dataset_path)
+        self.beatmaps_df = pd.read_csv(os.path.join(dataset_path, "beatmaps.csv"))
+        self.time_points_df = pd.read_csv(
+            os.path.join(dataset_path, "timing_points.csv")
+        )
+        self.hit_objects_df = pd.read_csv(os.path.join(dataset_path, "hit_objects.csv"))
+
+        self.mel_folder, self.checkpoint_file = self.setup_output_paths()
         self.audio_path = os.path.join(dataset_path, "audio")
 
-    def get_output_folder(self, dataset_path):
-        mel_folder = os.path.join(dataset_path, "formatted", "mels")
+    def setup_output_paths(self):
+        mel_folder = os.path.join(self.dataset_path, "formatted", "mels")
         os.makedirs(mel_folder, exist_ok=True)
-        checkpoint_file = os.path.join(dataset_path, "formatted", "formatted.csv")
 
+        checkpoint_file = os.path.join(self.dataset_path, "formatted", "formatted.csv")
         if not os.path.exists(checkpoint_file):
-            df_template = pd.DataFrame(columns=col_types.keys())
-            df_template.to_csv(checkpoint_file, index=False)
+            pd.DataFrame(columns=COL_TYPES.keys()).to_csv(checkpoint_file, index=False)
 
         return mel_folder, checkpoint_file
 
-    def get_timing_attributes(self, series):
-        beatmap_ids = series["id"].values
-        target_times = series["time"].values
+    def extract_timing_attributes(self, group):
+        beatmap_ids = group["id"].values
+        target_times = group["time"].values
 
-        selected_columns = (
-            self.beatmaps_df.set_index("id")
-            .loc[beatmap_ids, ["slider_multiplier", "difficulty_rating", "mapper_id"]]
-            .astype(float)
-        )
+        selected_info = self.beatmaps_df.set_index("id").loc[beatmap_ids]
+        base_velocities = selected_info["slider_multiplier"].values
+        difficulty_ratings = selected_info["difficulty_rating"].values
+        mapper_ids = selected_info["mapper_id"].values
 
-        base_velocities = selected_columns["slider_multiplier"].values
-        difficulty_ratings = selected_columns["difficulty_rating"].values
-        mapper_ids = selected_columns["mapper_id"].values
-
-        grouped_time_points = self.time_points_df.groupby("id")
+        grouped_timing = self.time_points_df.groupby("id")
 
         results = []
-        for beatmap_id, target_time, base_velocity, difficulty_rating, mapper_id in zip(
+        for b_id, t_time, base_vel, diff, mapper in zip(
             beatmap_ids, target_times, base_velocities, difficulty_ratings, mapper_ids
         ):
-            beatmap_time_points = grouped_time_points.get_group(beatmap_id)
-            df_filtered = beatmap_time_points[
-                beatmap_time_points["time"] <= target_time
-            ]
+            tp_group = grouped_timing.get_group(b_id)
+            relevant_tp = tp_group[tp_group["time"] <= t_time]
 
-            latest_uninherited = df_filtered[df_filtered["uninherited"] == 1.0]
-            if not latest_uninherited.empty:
-                latest_uninherited = latest_uninherited.loc[
-                    latest_uninherited["time"].idxmax()
-                ]
+            uninherited = relevant_tp[relevant_tp["uninherited"] == 1.0]
+            inherited = relevant_tp[relevant_tp["uninherited"] == 0.0]
+
+            if not uninherited.empty:
+                main_tp = uninherited.loc[uninherited["time"].idxmax()]
             else:
-                first_uninherited = beatmap_time_points[
-                    beatmap_time_points["uninherited"] == 1.0
-                ]
-                latest_uninherited = first_uninherited.iloc[0]
+                main_tp = tp_group[tp_group["uninherited"] == 1.0].iloc[0]
 
-            latest_inherited = df_filtered[df_filtered["uninherited"] == 0.0]
-            latest_inherited = (
-                latest_inherited.loc[latest_inherited["time"].idxmax()]
-                if not latest_inherited.empty
+            inherited_tp = (
+                inherited.loc[inherited["time"].idxmax()]
+                if not inherited.empty
                 else None
             )
 
-            beat_length = latest_uninherited["beat_length"]
-            meter = latest_uninherited["meter"]
-            slider_velocity = base_velocity * (
-                -100 / latest_inherited["beat_length"]
-                if latest_inherited is not None
-                else 1
+            beat_length = main_tp["beat_length"]
+            meter = main_tp["meter"]
+            slider_velocity = base_vel * (
+                -100 / inherited_tp["beat_length"] if inherited_tp is not None else 1
             )
-
-            sample_set = (
-                latest_inherited["sample_set"] if latest_inherited is not None else 1
-            )
-            volume = latest_inherited["volume"] if latest_inherited is not None else 60
-            effects = latest_inherited["effects"] if latest_inherited is not None else 0
+            sample_set = inherited_tp["sample_set"] if inherited_tp is not None else 1
+            volume = inherited_tp["volume"] if inherited_tp is not None else 60
+            effects = inherited_tp["effects"] if inherited_tp is not None else 0
 
             results.append(
                 {
@@ -120,96 +103,94 @@ class Formatter:
                     "sample_set": sample_set,
                     "volume": volume,
                     "effects": effects,
-                    "difficulty_rating": difficulty_rating,
-                    "mapper_id": mapper_id,
+                    "difficulty_rating": diff,
+                    "mapper_id": mapper,
                 }
             )
-
         return pd.DataFrame(results)
 
-    def save_mel(self, song_id, song_path):
+    def save_mel_spectrogram(self, song_id, song_path):
         y, sr = librosa.load(song_path, sr=22050)
-
         mel_spec = librosa.feature.melspectrogram(
             y=y, sr=sr, n_fft=2048, hop_length=512, n_mels=128
         )
-
         log_mel_spec = librosa.power_to_db(mel_spec, ref=np.max)
-
         np.save(os.path.join(self.mel_folder, f"{song_id}.npy"), log_mel_spec)
 
     def process_song(self, song_id, song_path):
-        self.save_mel(song_id, song_path)
-        beatmaps = self.hit_objects_df[
+        self.save_mel_spectrogram(song_id, song_path)
+
+        beatmap_data = self.hit_objects_df[
             self.hit_objects_df["beatmap_id"] == int(song_id)
         ].copy()
 
-        timing_attributes = [
-            self.get_timing_attributes(series) for _, series in beatmaps.groupby("id")
+        timing_data = [
+            self.extract_timing_attributes(group)
+            for _, group in beatmap_data.groupby("id")
         ]
-        timing_df = pd.concat(timing_attributes, ignore_index=True)
+        timing_df = pd.concat(timing_data, ignore_index=True)
 
-        beatmaps = beatmaps.reset_index(drop=True)
-        beatmaps = pd.concat([beatmaps, timing_df], axis=1)
+        beatmap_data.reset_index(drop=True, inplace=True)
+        beatmap_data = pd.concat([beatmap_data, timing_df], axis=1)
 
-        beatmaps["slider_time"] = (
-            beatmaps["length"] / (beatmaps["slider_velocity"] * 100)
-        ) * beatmaps["beat_length"]
-
-        def calculate_tick(row):
+        def compute_tick(row):
             if row["type"] == "slider":
-                return (row["slider_time"] / row["beat_length"]) * row["meter"]
+                return (row["length"] / (row["slider_velocity"] * 100)) * row["meter"]
             elif row["type"] == "spinner":
-                return ((row["spinner_time"] - row["time"]) / row["beat_length"]) * row["meter"]
-            else:
-                return 0 
+                return ((row["spinner_time"] - row["time"]) / row["beat_length"]) * row[
+                    "meter"
+                ]
+            return 0
 
-        beatmaps["tick"] = beatmaps.apply(calculate_tick, axis=1)
+        beatmap_data["tick"] = beatmap_data.apply(compute_tick, axis=1)
 
-        beatmaps.drop(columns="length", inplace=True)
-        final_df = beatmaps[col_types.keys()]
-        final_df = final_df.astype(col_types)
-        return final_df
+        beatmap_data.drop(columns="length", inplace=True)
+        beatmap_data = beatmap_data[COL_TYPES.keys()].astype(COL_TYPES)
+
+        return beatmap_data
 
     def format_dataset(self):
-        processed = set()
-        chunks = pd.read_csv(
-            self.checkpoint_file, usecols=["beatmap_id"], chunksize=500000
-        )
+        processed_ids = self.get_already_processed_ids()
 
-        for chunk in chunks:
-            processed.update(str(id) for id in chunk["beatmap_id"].unique())
-            del chunk
-
-        songs_ids = os.listdir(self.audio_path)
-        songs_full_paths = {
+        song_paths = {
             song_id: os.path.join(
                 self.audio_path,
                 song_id,
                 os.listdir(os.path.join(self.audio_path, song_id))[0],
             )
-            for song_id in songs_ids
-            if song_id not in processed
+            for song_id in os.listdir(self.audio_path)
+            if song_id not in processed_ids
         }
 
         with ProcessPoolExecutor(max_workers=os.cpu_count() // 2) as executor:
             futures = {
-                executor.submit(self.process_song, song_id, song_path): song_id
-                for song_id, song_path in songs_full_paths.items()
+                executor.submit(self.process_song, song_id, path): song_id
+                for song_id, path in song_paths.items()
             }
 
-            for future in tqdm(as_completed(futures), total=len(futures)):
+            for future in tqdm(
+                as_completed(futures), total=len(futures), desc="Processing songs"
+            ):
                 final_df = future.result()
                 final_df.to_csv(
                     self.checkpoint_file, mode="a", header=False, index=False
                 )
 
+    def get_already_processed_ids(self):
+        processed_ids = set()
+        for chunk in pd.read_csv(
+            self.checkpoint_file, usecols=["beatmap_id"], chunksize=500_000
+        ):
+            processed_ids.update(str(bid) for bid in chunk["beatmap_id"].unique())
+        return processed_ids
+
 
 def main():
-    parser = argparse.ArgumentParser(description="Format dataset")
+    parser = argparse.ArgumentParser(
+        description="Format beatmap dataset with timing and audio features."
+    )
     parser.add_argument(
-        "--dataset_path",
-        required=True,
+        "--dataset_path", required=True, help="Path to dataset root folder."
     )
     args = parser.parse_args()
 
