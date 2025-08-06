@@ -24,9 +24,11 @@ col_types = {
     "volume": "int8",
     "effects": "int8",
     "difficulty_rating": "float16",
+    "meter": "int8",
     "beat_length": "float64",
     "mapper_id": "int64",
     "beatmap_id": "int64",
+    "tick": "float64"
 }
 
 
@@ -87,17 +89,6 @@ class Formatter:
                 first_uninherited = beatmap_time_points[
                     beatmap_time_points["uninherited"] == 1.0
                 ]
-                if first_uninherited.empty:
-                    results.append(
-                        {
-                            "beat_length": np.nan,
-                            "slider_velocity": np.nan,
-                            "sample_set": np.nan,
-                            "volume": np.nan,
-                            "effects": np.nan,
-                        }
-                    )
-                    continue
                 latest_uninherited = first_uninherited.iloc[0]
 
             latest_inherited = df_filtered[df_filtered["uninherited"] == 0.0]
@@ -108,13 +99,12 @@ class Formatter:
             )
 
             beat_length = latest_uninherited["beat_length"]
+            meter = latest_uninherited["meter"]
             slider_velocity = base_velocity * (
                 -100 / latest_inherited["beat_length"]
                 if latest_inherited is not None
                 else 1
             )
-
-            slider_velocity = round(slider_velocity, 4)
 
             sample_set = (
                 latest_inherited["sample_set"] if latest_inherited is not None else 1
@@ -125,6 +115,7 @@ class Formatter:
             results.append(
                 {
                     "beat_length": beat_length,
+                    "meter": meter,
                     "slider_velocity": slider_velocity,
                     "sample_set": sample_set,
                     "volume": volume,
@@ -164,6 +155,16 @@ class Formatter:
         beatmaps["slider_time"] = (
             beatmaps["length"] / (beatmaps["slider_velocity"] * 100)
         ) * beatmaps["beat_length"]
+
+        def calculate_tick(row):
+            if row["type"] == "slider":
+                return (row["slider_time"] / row["beat_length"]) * row["meter"]
+            elif row["type"] == "spinner":
+                return ((row["spinner_time"] - row["time"]) / row["beat_length"]) * row["meter"]
+            else:
+                return 0 
+
+        beatmaps["tick"] = beatmaps.apply(calculate_tick, axis=1)
 
         beatmaps.drop(columns="length", inplace=True)
         final_df = beatmaps[col_types.keys()]
