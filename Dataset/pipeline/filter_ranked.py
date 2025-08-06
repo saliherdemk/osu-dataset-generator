@@ -1,7 +1,8 @@
-import os
 import argparse
-import pandas as pd
+import os
 import shutil
+
+import pandas as pd
 
 
 def filter_ranked_maps(dataset_folder, ranked_date, exclude):
@@ -59,7 +60,9 @@ def main():
 
     parser.add_argument("--min_ranked_date", required=False, default="2011-01-01")
 
-    parser.add_argument("--excluded_diffs", required=False, default="0,8,9,10,11,12")
+    parser.add_argument(
+        "--excluded_diffs", required=False, default="0,1,7,8,9,10,11,12"
+    )
 
     args = parser.parse_args()
 

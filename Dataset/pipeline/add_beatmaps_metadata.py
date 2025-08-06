@@ -1,10 +1,11 @@
-import os
 import argparse
-from tqdm import tqdm
+import os
+import time
+
 import pandas as pd
 import requests
 from dotenv import load_dotenv
-import time
+from tqdm import tqdm
 
 load_dotenv()
 CLIENT_ID = os.getenv("CLIENT_ID")
@@ -35,12 +36,13 @@ def get_beatmapset_metadata(beatmapset_id, access_token):
         beatmapset = response.json()
         ranked_date = beatmapset.get("ranked_date")
         status = beatmapset.get("status", "Unknown")
+        mapper_id = beatmapset.get("user_id")
 
         beatmaps = {}
         for beatmap in beatmapset.get("beatmaps"):
             beatmaps[beatmap["version"]] = beatmap["difficulty_rating"]
 
-        return (status, ranked_date, beatmaps)
+        return (status, ranked_date, mapper_id, beatmaps)
     else:
         return f"Error: {response.status_code} - {response.text}"
 
@@ -63,9 +65,10 @@ def add_metadata(dataset_folder):
         beatmapset_id = row["id"].split("-")[0]
         version = row["version"]
 
-        (status, ranked_date, beatmaps) = metadatas[beatmapset_id]
+        (status, ranked_date, mapper_id, beatmaps) = metadatas[beatmapset_id]
         row["status"] = status
         row["ranked_date"] = ranked_date
+        row["mapper_id"] = mapper_id
         row["difficulty_rating"] = beatmaps[version]
         return row
 
