@@ -27,7 +27,7 @@ COL_TYPES = {
     "beat_length": "float64",
     "mapper_id": "int64",
     "beatmap_id": "int64",
-    "tick": "float64",
+    "tick": "int64",
 }
 
 
@@ -134,13 +134,15 @@ class Formatter:
         beatmap_data = pd.concat([beatmap_data, timing_df], axis=1)
 
         def compute_tick(row):
+            tick = 0
             if row["type"] == "slider":
-                return (row["length"] / (row["slider_velocity"] * 100)) * row["meter"]
+                slider_units = row["length"] / (row["slider_velocity"] * 100)
+                tick = slider_units * row["meter"]
             elif row["type"] == "spinner":
-                return ((row["spinner_time"] - row["time"]) / row["beat_length"]) * row[
-                    "meter"
-                ]
-            return 0
+                spinner_duration = row["spinner_time"] - row["time"]
+                beats = spinner_duration / row["beat_length"]
+                tick = beats * row["meter"]
+            return int(round(tick))
 
         beatmap_data["tick"] = beatmap_data.apply(compute_tick, axis=1)
 

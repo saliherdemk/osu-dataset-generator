@@ -1,8 +1,9 @@
 import argparse
-import pandas as pd
-import numpy as np
 import json
 import os
+
+import numpy as np
+import pandas as pd
 
 
 def write_mfcc_stats(mean, std, output_file):
