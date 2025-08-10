@@ -28,6 +28,7 @@ COL_TYPES = {
     "mapper_id": "int64",
     "beatmap_id": "int64",
     "tick": "int64",
+    "delta_time": "int64",
 }
 
 
@@ -145,6 +146,9 @@ class Formatter:
             return int(round(tick))
 
         beatmap_data["tick"] = beatmap_data.apply(compute_tick, axis=1)
+        beatmap_data["delta_time"] = (
+            beatmap_data.groupby("id")["time"].diff().fillna(0).astype(int)
+        )
 
         beatmap_data.drop(columns="length", inplace=True)
         beatmap_data = beatmap_data[COL_TYPES.keys()].astype(COL_TYPES)
