@@ -25,6 +25,26 @@ def get_delta_time(dt):
     return ",".join(result)
 
 
+def get_tick(t):
+    result = ["<start_tick>"]
+    m = t // 50
+    n = t % 50
+    for _ in range(m):
+        result.append("tick_50")
+    result += ["tick_" + str(n), "<end_tick>"]
+    return ",".join(result)
+
+
+def get_repeat(r):
+    result = ["<start_repeat>"]
+    m = r // 30
+    n = r % 30
+    for _ in range(m):
+        result.append("repeat_30")
+    result += ["repeat_" + str(n), "<end_repeat>"]
+    return ",".join(result)
+
+
 def encode(beatmap):
     encoded = ["<beatmap_start>"]
 
@@ -56,13 +76,12 @@ def encode(beatmap):
 
         if hit_obj_type == "slider":
             path = parse_path(row["path"])
-            repeat = f"repeat_{row["repeat"]}"
+            repeat = get_repeat(row["repeat"])
             slider_velocity = f"sv_{round(row["slider_velocity"], 1)}"
             hit_obj += [path, repeat, slider_velocity]
 
         if hit_obj_type != "circle":
-            tick = f"tick_{row["tick"]}"
-            hit_obj.append(tick)
+            hit_obj.append(get_tick(row["tick"]))
 
         hit_obj.append("<hit_object_end>")
         encoded.append(",".join(hit_obj))
