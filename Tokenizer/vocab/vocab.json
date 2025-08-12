@@ -3,7 +3,7 @@
     "<beatmap_start>",
     "<beatmap_end>",
     "<hit_object_start>",
-    "hit_object_end>"
+    "<hit_object_end>"
   ],
   "type": [
     "type_circle",

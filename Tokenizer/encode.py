@@ -1,6 +1,9 @@
 import argparse
+import json
+import os
 
 import pandas as pd
+from tqdm import tqdm
 
 
 def parse_path(path):
@@ -9,7 +12,10 @@ def parse_path(path):
     p.append(splitted.pop(0))
     for i in splitted:
         x, y = i.split(":")
-        p += ["x_" + x, "y_" + y]
+        x = max(0, min(512, round(int(x) / 32) * 32))
+        y = max(0, min(384, round(int(y) / 32) * 32))
+
+        p += [f"x_{x}", f"y_{y}"]
     p.append("<end_path>")
 
     return ",".join(p)
@@ -53,8 +59,8 @@ def encode(beatmap):
         hit_obj = ["<hit_object_start>"]
 
         t = "type_" + row["type"]
-        x = f"x_{round(row["x"] / 32) * 32}"
-        y = f"y_{round(row["y"] / 32) * 32}"
+        x = f"x_{max(0, min(512, round(row["x"] / 32) * 32))}"
+        y = f"y_{max(0, min(384, round(row["y"] / 32) * 32))}"
         hit_sound = f"hit_sound_{row["hit_sound"]}"
         new_combo = f"new_combo_{int(row["new_combo"])}"
         sample_set = f"sample_set_{row["sample_set"]}"
@@ -86,17 +92,29 @@ def encode(beatmap):
         hit_obj.append("<hit_object_end>")
         encoded.append(",".join(hit_obj))
     encoded.append("<beatmap_end>")
-    return "".join(encoded)
+    return ",".join(encoded)
+
+
+def tokens_to_ids(text, tok_to_id):
+    ids = [str(tok_to_id[token]) for token in text.split(",")]
+    return ",".join(ids)
 
 
 def process(input_file, output_file):
+    dirname = os.path.dirname(__file__)
+    filename = os.path.join(dirname, "vocab/token2id.json")
+    with open(filename, "r") as f:
+        tok_to_id = json.load(f)
+
     df = pd.read_csv(input_file)
 
     grouped = df.groupby("id")
 
     dataset = []
-    for key, df in grouped:
-        dataset.append({"beatmap_id": key, "encoded": encode(df)})
+    for key, group in tqdm(grouped, desc="Tokenize beatmaps"):
+        dataset.append(
+            {"beatmap_id": key, "tokenized": tokens_to_ids(encode(group), tok_to_id)}
+        )
 
     new_df = pd.DataFrame(dataset)
     new_df.to_csv(output_file, index=False)
