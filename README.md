@@ -162,6 +162,6 @@ You can find the vocabulary in the `Tokenizer/vocab/` folder. Most of the tokeni
 * `delta_time` has a range from 0 to 2000. Larger delta_time values are represented as a combination of these values. (Example: 4500 → 2000, 2000, 500)
 * `slider_velocity` has a precision of 0.1.
 * `tick` has a range from 0 to 50. Larger values are represented as a combination of these tokens.
-* `repeat` has a range from 0 to 30. Larger values are represented as a combination of these tokens. (didn't like that. repeat should be single token.)
+* `repeat` has a range from 0 to 30. Larger values are represented as a combination of these tokens. (didn't like that. repeat should be single token. UPDATE: I hoper there will be practiacal limition of being ranked but appreantly there is not. Beatmap `1862270` has 96 repeat in one slider and it's ranked. Also in fine tuning people might one to create tech-based map so repeat will be stay as it is.)
 
 

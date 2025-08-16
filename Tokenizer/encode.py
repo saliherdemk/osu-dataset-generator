@@ -6,6 +6,12 @@ import pandas as pd
 from tqdm import tqdm
 
 
+def correct_effect_value(x):
+    if x > 8:
+        return x != 5746
+    return 0 if x == 8 else x
+
+
 def parse_path(path):
     p = ["<start_path>"]
     splitted = path.split("|")
@@ -31,13 +37,13 @@ def get_delta_time(dt):
     return ",".join(result)
 
 
-def get_tick(t):
-    result = ["<start_tick>"]
-    m = t // 50
-    n = t % 50
+def get_duration(t):
+    result = ["<start_duration>"]
+    m = t // 50000
+    n = t % 50000
     for _ in range(m):
-        result.append("tick_50")
-    result += ["tick_" + str(n), "<end_tick>"]
+        result.append("tick_50000")
+    result += ["duration_" + str(n), "<end_duration>"]
     return ",".join(result)
 
 
@@ -65,7 +71,7 @@ def encode(beatmap):
         new_combo = f"new_combo_{int(row["new_combo"])}"
         sample_set = f"sample_set_{row["sample_set"]}"
         volume = f"vol_{round(row["volume"] / 10) * 10}"
-        effects = f"effects_{row["effects"]}"
+        effects = f"effects_{correct_effect_value(row["effects"])}"
         delta_time = get_delta_time(row["delta_time"])
 
         hit_obj += [
@@ -87,7 +93,7 @@ def encode(beatmap):
             hit_obj += [path, repeat, slider_velocity]
 
         if hit_obj_type != "circle":
-            hit_obj.append(get_tick(row["tick"]))
+            hit_obj.append(get_duration(row["duration"]))
 
         hit_obj.append("<hit_object_end>")
         encoded.append(",".join(hit_obj))

@@ -27,7 +27,7 @@ COL_TYPES = {
     "beat_length": "float64",
     "mapper_id": "int64",
     "beatmap_id": "int64",
-    "tick": "int64",
+    "duration": "int64",
     "delta_time": "int64",
 }
 
@@ -73,28 +73,30 @@ class Formatter:
             tp_group = grouped_timing.get_group(b_id)
             relevant_tp = tp_group[tp_group["time"] <= t_time]
 
-            uninherited = relevant_tp[relevant_tp["uninherited"] == 1.0]
-            inherited = relevant_tp[relevant_tp["uninherited"] == 0.0]
-
-            if not uninherited.empty:
-                main_tp = uninherited.loc[uninherited["time"].idxmax()]
+            uninherited_candidates = relevant_tp[relevant_tp["uninherited"] == 1.0]
+            if not uninherited_candidates.empty:
+                latest_uninherited = uninherited_candidates.loc[
+                    uninherited_candidates["time"].idxmax()
+                ]
             else:
-                main_tp = tp_group[tp_group["uninherited"] == 1.0].iloc[0]
+                latest_uninherited = tp_group.iloc[0]
 
-            inherited_tp = (
-                inherited.loc[inherited["time"].idxmax()]
-                if not inherited.empty
-                else None
-            )
+            inherited_candidates = relevant_tp[relevant_tp["uninherited"] == 0.0]
+            if not inherited_candidates.empty:
+                latest_inherited = inherited_candidates.loc[
+                    inherited_candidates["time"].idxmax()
+                ]
+            else:
+                latest_inherited = latest_uninherited.copy()
+                latest_inherited["beat_length"] = -100
 
-            beat_length = main_tp["beat_length"]
-            meter = main_tp["meter"]
-            slider_velocity = base_vel * (
-                -100 / inherited_tp["beat_length"] if inherited_tp is not None else 1
-            )
-            sample_set = inherited_tp["sample_set"] if inherited_tp is not None else 1
-            volume = inherited_tp["volume"] if inherited_tp is not None else 60
-            effects = inherited_tp["effects"] if inherited_tp is not None else 0
+            beat_length = latest_uninherited["beat_length"]
+            meter = latest_uninherited["meter"]
+            rel_sv = max(min(10, -100 / latest_inherited["beat_length"]), 0.1)
+            slider_velocity = base_vel * rel_sv
+            sample_set = latest_inherited["sample_set"]
+            volume = latest_inherited["volume"]
+            effects = latest_inherited["effects"]
 
             results.append(
                 {
@@ -134,18 +136,17 @@ class Formatter:
         beatmap_data.reset_index(drop=True, inplace=True)
         beatmap_data = pd.concat([beatmap_data, timing_df], axis=1)
 
-        def compute_tick(row):
-            tick = 0
+        def compute_duration(row):
+            duration = 0
             if row["type"] == "slider":
-                slider_units = row["length"] / (row["slider_velocity"] * 100)
-                tick = slider_units * row["meter"]
+                duration = (
+                    row["length"] / (row["slider_velocity"] * 100) * row["beat_length"]
+                )
             elif row["type"] == "spinner":
-                spinner_duration = row["spinner_time"] - row["time"]
-                beats = spinner_duration / row["beat_length"]
-                tick = beats * row["meter"]
-            return int(round(tick))
+                duration = row["spinner_time"] - row["time"]
+            return int(round(duration * 100))
 
-        beatmap_data["tick"] = beatmap_data.apply(compute_tick, axis=1)
+        beatmap_data["duration"] = beatmap_data.apply(compute_duration, axis=1)
         beatmap_data["delta_time"] = (
             beatmap_data.groupby("id")["time"].diff().fillna(0).astype(int)
         )
@@ -168,19 +169,11 @@ class Formatter:
             if song_id not in processed_ids
         }
 
-        with ProcessPoolExecutor(max_workers=os.cpu_count() // 2) as executor:
-            futures = {
-                executor.submit(self.process_song, song_id, path): song_id
-                for song_id, path in song_paths.items()
-            }
-
-            for future in tqdm(
-                as_completed(futures), total=len(futures), desc="Processing songs"
-            ):
-                final_df = future.result()
-                final_df.to_csv(
-                    self.checkpoint_file, mode="a", header=False, index=False
-                )
+        for song_id, path in tqdm(
+            song_paths.items(), total=len(song_paths), desc="Processing songs"
+        ):
+            df = self.process_song(song_id, path)
+            df.to_csv(self.checkpoint_file, mode="a", header=False, index=False)
 
     def get_already_processed_ids(self):
         processed_ids = set()
