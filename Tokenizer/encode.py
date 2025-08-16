@@ -39,10 +39,10 @@ def get_delta_time(dt):
 
 def get_duration(t):
     result = ["<start_duration>"]
-    m = t // 50000
-    n = t % 50000
+    m = t // 3000
+    n = t % 3000
     for _ in range(m):
-        result.append("tick_50000")
+        result.append("duration_3000")
     result += ["duration_" + str(n), "<end_duration>"]
     return ",".join(result)
 

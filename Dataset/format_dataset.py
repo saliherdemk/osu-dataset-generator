@@ -144,7 +144,7 @@ class Formatter:
                 )
             elif row["type"] == "spinner":
                 duration = row["spinner_time"] - row["time"]
-            return int(round(duration * 100))
+            return int(round(duration * 10))
 
         beatmap_data["duration"] = beatmap_data.apply(compute_duration, axis=1)
         beatmap_data["delta_time"] = (

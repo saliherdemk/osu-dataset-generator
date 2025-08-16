@@ -1,38 +1,57 @@
 import argparse
+import os
+import shutil
+
 import pandas as pd
 
 
-def merge_datasets(file_one, file_two, output_file):
-    df_one = pd.read_csv(file_one, chunksize=500000)
-    df_two = pd.read_csv(file_two, chunksize=500000)
+def merge_datasets(folder_one, folder_two, output_folder):
+    df_one = pd.read_csv(os.path.join(folder_one, "encoded.csv"))
+    df_two = pd.read_csv(os.path.join(folder_two, "encoded.csv"))
 
-    is_first = True
-    for chunk in df_one:
-        chunk.to_csv(output_file, mode="a", header=is_first, index=False)
-        is_first = False
+    df_combined = pd.concat([df_one, df_two], ignore_index=True)
 
-    for chunk in df_two:
-        chunk.to_csv(output_file, mode="a", header=is_first, index=False)
+    output_audio_folder = os.path.join(output_folder, "audio")
+    os.makedirs(output_audio_folder, exist_ok=True)
+
+    df_combined.to_csv(os.path.join(output_folder, "encoded.csv"), index=False)
+
+    audio_path_one = os.path.join(folder_one, "audio")
+    audio_path_two = os.path.join(folder_two, "audio")
+    audio_folders_one = os.listdir(audio_path_one)
+    audio_folders_two = os.listdir(audio_path_two)
+
+    for f in audio_folders_one:
+        shutil.copytree(
+            os.path.join(audio_path_one, f),
+            os.path.join(output_audio_folder, f),
+        )
+
+    for f in audio_folders_two:
+        shutil.copytree(
+            os.path.join(audio_path_two, f),
+            os.path.join(output_audio_folder, f),
+        )
 
 
 def main():
     parser = argparse.ArgumentParser(description="Merge datasets")
     parser.add_argument(
-        "--file_one",
+        "--folder_one",
         required=True,
     )
     parser.add_argument(
-        "--file_two",
+        "--folder_two",
         required=True,
     )
     parser.add_argument(
-        "--output_file",
+        "--output_folder",
         required=True,
     )
 
     args = parser.parse_args()
 
-    merge_datasets(args.file_one, args.file_two, args.output_file)
+    merge_datasets(args.folder_one, args.folder_two, args.output_folder)
 
 
 if __name__ == "__main__":
