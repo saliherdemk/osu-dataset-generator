@@ -39,10 +39,10 @@ def get_delta_time(dt):
 
 def get_duration(t):
     result = ["<start_duration>"]
-    m = t // 3000
-    n = t % 3000
+    m = t // 2000
+    n = t % 2000
     for _ in range(m):
-        result.append("duration_3000")
+        result.append("duration_2000")
     result += ["duration_" + str(n), "<end_duration>"]
     return ",".join(result)
 
@@ -58,7 +58,7 @@ def get_repeat(r):
 
 
 def encode(beatmap):
-    encoded = ["<beatmap_start>"]
+    encoded = []
 
     for _, row in beatmap.iterrows():
         hit_obj_type = row["type"]
@@ -97,8 +97,30 @@ def encode(beatmap):
 
         hit_obj.append("<hit_object_end>")
         encoded.append(",".join(hit_obj))
-    encoded.append("<beatmap_end>")
     return ",".join(encoded)
+
+
+def chunk_encoding(key, group):
+    sr = 22050
+    hop_length = 512
+    chunk_size = 512
+
+    chunk_duration = (chunk_size * hop_length) / sr
+    group["time_sec"] = group["time"] / 1000
+
+    group["chunk_idx"] = (group["time_sec"] // chunk_duration).astype(int)
+
+    chunked_objects = group.groupby("chunk_idx")
+    dataset = []
+
+    for chunk_idx, group in chunked_objects:
+        encoded = encode(group)
+        if chunk_idx == 0:
+            encoded = "<beatmap_start>" + encoded
+        if chunk_idx == len(chunked_objects) - 1:
+            encoded = encoded + "<beatmap_end>"
+        dataset.append({"beatmap_id": key, "chunk": chunk_idx, "tokenized": encoded})
+    return pd.DataFrame(dataset)
 
 
 def tokens_to_ids(text, tok_to_id):
@@ -117,13 +139,13 @@ def process(input_file, output_file):
     grouped = df.groupby("id")
 
     dataset = []
-    for key, group in tqdm(grouped, desc="Tokenize beatmaps"):
-        dataset.append(
-            {"beatmap_id": key, "tokenized": tokens_to_ids(encode(group), tok_to_id)}
-        )
 
-    new_df = pd.DataFrame(dataset)
-    new_df.to_csv(output_file, index=False)
+    for key, group in tqdm(grouped, desc="Tokenize beatmaps"):
+        dataset.append(chunk_encoding(key, group))
+
+    dataset = pd.concat(dataset, ignore_index=True)
+
+    dataset.to_csv(output_file, index=False)
 
 
 def main():

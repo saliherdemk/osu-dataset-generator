@@ -112,13 +112,33 @@ class Formatter:
             )
         return pd.DataFrame(results)
 
-    def save_mel_spectrogram(self, song_id, song_path):
+    def save_mel_spectrogram(self, song_id, song_path, chunk_size=512):
         y, sr = librosa.load(song_path, sr=22050)
         mel_spec = librosa.feature.melspectrogram(
             y=y, sr=sr, n_fft=2048, hop_length=512, n_mels=128
         )
         log_mel_spec = librosa.power_to_db(mel_spec, ref=np.max)
-        np.save(os.path.join(self.mel_folder, f"{song_id}.npy"), log_mel_spec)
+
+        log_mel_spec = log_mel_spec.T
+
+        n_chunks = int(np.ceil(log_mel_spec.shape[0] / chunk_size))
+        chunks = []
+        for i in range(n_chunks):
+            start = i * chunk_size
+            end = start + chunk_size
+            chunk = log_mel_spec[start:end]
+
+            if chunk.shape[0] < chunk_size:
+                pad_len = chunk_size - chunk.shape[0]
+                chunk = np.pad(chunk, ((0, pad_len), (0, 0)), mode="constant")
+
+            chunks.append(chunk)
+
+        np.save(os.path.join(self.mel_folder, f"{song_id}.npy"), np.array(chunks))
+        # for idx, c in enumerate(chunks):
+        #     np.save(os.path.join(self.mel_folder, f"{song_id}_{idx}.npy"), c)
+
+        print(f"Saved {len(chunks)} chunks for song {song_id}")
 
     def process_song(self, song_id, song_path):
         self.save_mel_spectrogram(song_id, song_path)
@@ -144,7 +164,7 @@ class Formatter:
                 )
             elif row["type"] == "spinner":
                 duration = row["spinner_time"] - row["time"]
-            return int(round(duration * 10))
+            return int(duration)
 
         beatmap_data["duration"] = beatmap_data.apply(compute_duration, axis=1)
         beatmap_data["delta_time"] = (

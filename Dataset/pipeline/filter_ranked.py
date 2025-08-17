@@ -60,9 +60,7 @@ def main():
 
     parser.add_argument("--min_ranked_date", required=False, default="2011-01-01")
 
-    parser.add_argument(
-        "--excluded_diffs", required=False, default="0,1,7,8,9,10,11,12"
-    )
+    parser.add_argument("--excluded_diffs", required=False, default="")
 
     args = parser.parse_args()
 
