@@ -134,9 +134,9 @@ class Formatter:
 
             chunks.append(chunk)
 
-        np.save(os.path.join(self.mel_folder, f"{song_id}.npy"), np.array(chunks))
-        # for idx, c in enumerate(chunks):
-        #     np.save(os.path.join(self.mel_folder, f"{song_id}_{idx}.npy"), c)
+        # np.save(os.path.join(self.mel_folder, f"{song_id}.npy"), np.array(chunks))
+        for idx, c in enumerate(chunks):
+            np.save(os.path.join(self.mel_folder, f"{song_id}_{idx}.npy"), c)
 
         print(f"Saved {len(chunks)} chunks for song {song_id}")
 
