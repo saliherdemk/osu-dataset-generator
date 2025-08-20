@@ -65,35 +65,28 @@ def encode(beatmap):
         hit_obj = ["<hit_object_start>"]
 
         t = "type_" + row["type"]
-        x = f"x_{max(0, min(512, round(row["x"] / 32) * 32))}"
-        y = f"y_{max(0, min(384, round(row["y"] / 32) * 32))}"
-        hit_sound = f"hit_sound_{row["hit_sound"]}"
-        new_combo = f"new_combo_{int(row["new_combo"])}"
-        sample_set = f"sample_set_{row["sample_set"]}"
-        volume = f"vol_{round(row["volume"] / 10) * 10}"
-        effects = f"effects_{correct_effect_value(row["effects"])}"
+        # x = f"x_{max(0, min(512, round(row["x"] / 32) * 32))}"
+        # y = f"y_{max(0, min(384, round(row["y"] / 32) * 32))}"
+        # hit_sound = f"hit_sound_{row["hit_sound"]}"
+        # new_combo = f"new_combo_{int(row["new_combo"])}"
+        # sample_set = f"sample_set_{row["sample_set"]}"
+        # volume = f"vol_{round(row["volume"] / 10) * 10}"
+        # effects = f"effects_{correct_effect_value(row["effects"])}"
         delta_time = get_delta_time(row["delta_time"])
 
-        hit_obj += [
-            t,
-            x,
-            y,
-            hit_sound,
-            new_combo,
-            sample_set,
-            volume,
-            effects,
-            delta_time,
-        ]
+        repeat = "<start_repeat>,repeat_0,<end_repeat>"
+        slider_velocity = "sv_0.0"
+        duration = "<start_duration>,duration_0,<end_duration>"
 
         if hit_obj_type == "slider":
-            path = parse_path(row["path"])
+            # path = parse_path(row["path"])
             repeat = get_repeat(row["repeat"])
             slider_velocity = f"sv_{round(row["slider_velocity"], 1)}"
-            hit_obj += [path, repeat, slider_velocity]
 
         if hit_obj_type != "circle":
-            hit_obj.append(get_duration(row["duration"]))
+            duration = get_duration(row["duration"])
+
+        hit_obj += [t, delta_time, repeat, slider_velocity, duration]
 
         hit_obj.append("<hit_object_end>")
         encoded.append(",".join(hit_obj))
@@ -129,7 +122,8 @@ def chunk_encoding(key, group, chunk_num, tok_to_id):
                 {
                     "beatmap_id": key,
                     "chunk": chunk_idx,
-                    "tokenized": tokens_to_ids(encoded, tok_to_id),
+                    # "tokenized": tokens_to_ids(encoded, tok_to_id),
+                    "tokenized": encoded,
                 }
             )
 

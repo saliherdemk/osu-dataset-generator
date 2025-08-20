@@ -138,7 +138,7 @@ class Formatter:
         for idx, c in enumerate(chunks):
             np.save(os.path.join(self.mel_folder, f"{song_id}_{idx}.npy"), c)
 
-        print(f"Saved {len(chunks)} chunks for song {song_id}")
+        # print(f"Saved {len(chunks)} chunks for song {song_id}")
 
     def process_song(self, song_id, song_path):
         self.save_mel_spectrogram(song_id, song_path)
