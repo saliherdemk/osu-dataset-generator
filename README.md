@@ -1,5 +1,39 @@
-# Osu Dataset Generator
-This repository processes beatmaps from the rhythm game called [osu!](https://osu.ppy.sh/). It analyzes, processes, reformats, and normalizes both audio and hit objects. The final dataset will serve as training data for an osu! AI beatmap generator. The goal is to create an AI that can generate proper beatmaps from just an mp3 file, supporting a variety of difficulty levels. 
+# osu! Beatmap Processing and AI Generator
+
+More features extracted, a more comprehensive version of the process lives on the master branch. Deprecated in favor of the seq2seq model for tokenization.
+
+
+This repository processes beatmaps from the rhythm game called [osu!](https://osu.ppy.sh/). It analyzes, processes, reformats, and normalizes both audio and hit objects. The final dataset will serve as training data for an osu! AI beatmap generator.  
+
+The goal is to create an AI that can generate proper beatmaps from just an MP3 file, supporting a variety of difficulty levels. Right now, I'm considering a seq2seq model with an encoder-decoder Transformer for hit object time prediction since the task is essentially a machine translation problem. After that I’ll consider creating separate models for constructing beatmap styles. The main goal is to have a base model that can be fine-tunable with a specialized dataset to generate more specific style beatmaps.
+
+- Inputs: Mel spectrogram extracted from the MP3 file + difficulty rating (indicating how difficult the beatmap should be).  
+- Outputs: A sequence of hit objects that together form the beatmap.  
+
+Predicting hit object timing is one of the hardest parts of the problem. For the same mel spectrogram, hit object times can vary depending on the difficulty rating.  
+
+I plan to use a seq2seq Transformer where the encoder processes the mel spectrogram and difficulty rating, and the decoder generates the hit objects.  
+
+Example sequence format:  
+
+```
+<beatmap_start>,<hit_object_start>,type_slider,<start_delta_time>,dt_0,<end_delta_time>,<start_repeat>,repeat_1,<end_repeat>,sv_1.2,<start_duration>,duration_379,<end_duration>,<hit_object_end>,<hit_object_start>,type_slider,<start_delta_time>,dt_759,<end_delta_time>,<start_repeat>,repeat_1,<end_repeat>,sv_1.2,<start_duration>,duration_379,<end_duration>,<hit_object_end>,<hit_object_start>,type_slider,<start_delta_time>,dt_759,<end_delta_time>,<start_repeat>,repeat_1,<end_repeat>,sv_1.2,<start_duration>,duration_379,<end_duration>,<hit_object_end>,<hit_object_start>,type_slider,<start_delta_time>,dt_760,<end_delta_time>,<start_repeat>,repeat_1,<end_repeat>,sv_1.2,<start_duration>,duration_379,<end_duration>,<hit_object_end>,<hit_object_start>,type_slider,<start_delta_time>,dt_759,<end_delta_time>,<start_repeat>,repeat_1,<end_repeat>,sv_1.2,<start_duration>,duration_379,<end_duration>,<hit_object_end>
+```
+
+Here, `delta_time` indicates the difference between the last hit object time and the current hit object time. Representing timing relatively hopefully will help the model make better predictions.  
+
+BPM can change in the middle of a beatmap, so I think predicting BPM directly is unnecessary. We can just figure it out from the hit object times, but the hard part will be reducing noise and snapping objects to the right beats.  
+
+
+Another problem is tokenization. Since `delta_time` can be anywhere from 0 to infinity, I split it into smaller chunks.  
+
+Example:  
+
+4500 → `<start_delta_time>,dt_2000,dt_2000,dt_500<end_delta_time>`
+
+This way large time gaps can be broken down into smaller more manageable tokens.  
+
+I'm still not sure which attributes should be tokenized as discrete tokens and which should remain continuous. See [`Tokenizer/encode.py`](Tokenizer/encode.py). Feel free to reach me out if you have any suggestions.
 
 # Environment Setup
 This project uses the Python version specified in the `.python-version` file. You can use [pyenv](https://github.com/pyenv/pyenv) to automatically switch to the correct version.
