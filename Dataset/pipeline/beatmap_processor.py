@@ -1,4 +1,5 @@
 import os
+
 import pandas as pd
 
 
@@ -15,6 +16,7 @@ class BeatmapProcessor:
             self.break_points = self.parse_break_points()
 
     def verify_mode(self):
+        print(self.beatmapset_folder)
         with open(
             os.path.join(self.beatmapset_folder, self.osu_file), "r", encoding="utf-8"
         ) as f:
@@ -39,7 +41,14 @@ class BeatmapProcessor:
 
             if in_hit_objects and line:
                 parts = line.split(",")
-                x, y, time, obj_type, hit_sound = map(int, parts[:5])
+
+                def safe_int(val):
+                    try:
+                        return int(val)
+                    except ValueError:
+                        return int(float(val))
+
+                x, y, time, obj_type, hit_sound = map(safe_int, parts[:5])
                 object_data = parts[5:]
                 t = "circle"
                 path = "E|"
@@ -124,7 +133,7 @@ class BeatmapProcessor:
             if line.startswith("["):
                 in_metadata = line == "[Metadata]"
                 continue
-            if in_metadata and line:
+            if in_metadata and line and ":" in line:
                 key, value = line.split(":", 1)
                 metadata[key.strip()] = value.strip()
 

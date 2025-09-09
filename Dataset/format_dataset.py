@@ -44,6 +44,7 @@ class Formatter:
 
         self.mel_folder, self.checkpoint_file = self.setup_output_paths()
         self.audio_path = os.path.join(dataset_path, "audio")
+        self.seperate_beatmap_id()
 
     def setup_output_paths(self):
         mel_folder = os.path.join(self.dataset_path, "formatted", "mels")
@@ -54,6 +55,17 @@ class Formatter:
             pd.DataFrame(columns=COL_TYPES.keys()).to_csv(checkpoint_file, index=False)
 
         return mel_folder, checkpoint_file
+
+    def seperate_beatmap_id(self):
+        self.beatmaps_df["beatmap_id"] = (
+            self.beatmaps_df["id"].str.split("-").str[0].astype("int64")
+        )
+        self.hit_objects_df["beatmap_id"] = (
+            self.hit_objects_df["id"].str.split("-").str[0].astype("int64")
+        )
+        self.time_points_df["beatmap_id"] = (
+            self.time_points_df["id"].str.split("-").str[0].astype("int64")
+        )
 
     def extract_timing_attributes(self, group):
         beatmap_ids = group["id"].values

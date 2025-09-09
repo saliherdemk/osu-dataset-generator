@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 
+import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
@@ -81,7 +82,7 @@ def encode(beatmap):
         if hit_obj_type == "slider":
             # path = parse_path(row["path"])
             repeat = get_repeat(row["repeat"])
-            slider_velocity = f"sv_{round(row["slider_velocity"], 1)}"
+            slider_velocity = f"sv_{np.round(row["slider_velocity"], 1)}"
 
         if hit_obj_type != "circle":
             duration = get_duration(row["duration"])

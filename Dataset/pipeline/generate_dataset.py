@@ -1,10 +1,11 @@
-import os
 import argparse
-from tqdm import tqdm
+import os
+import shutil
+
+import pandas as pd
 from beatmap_processor import BeatmapProcessor
 from data_exporter import DataExporter
-import pandas as pd
-import shutil
+from tqdm import tqdm
 
 
 def processed_beatmaps(dataset_path):
@@ -86,7 +87,7 @@ def process_folder(input_folder, dataset_path):
 
             audio_file = audio_files[audio_filename.lower()]
 
-            shutil.copy2(
+            shutil.move(
                 os.path.join(entry_path, audio_file),
                 os.path.join(audio_folder, audio_file),
             )

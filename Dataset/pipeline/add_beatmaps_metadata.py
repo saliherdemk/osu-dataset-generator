@@ -35,7 +35,7 @@ def get_beatmapset_metadata(beatmapset_id, access_token):
     if response.status_code == 200:
         beatmapset = response.json()
         ranked_date = beatmapset.get("ranked_date")
-        status = beatmapset.get("status", "Unknown")
+        status = beatmapset.get("status")
         mapper_id = beatmapset.get("user_id")
 
         beatmaps = {}
@@ -59,7 +59,7 @@ def add_metadata(dataset_folder):
     metadatas = {}
     for beatmapset_id in tqdm(beatmapset_ids):
         metadatas[beatmapset_id] = get_beatmapset_metadata(beatmapset_id, access_token)
-        time.sleep(0.2)
+        time.sleep(0.1)
 
     def fill_metadatas(row):
         beatmapset_id = row["id"].split("-")[0]
@@ -69,7 +69,7 @@ def add_metadata(dataset_folder):
         row["status"] = status
         row["ranked_date"] = ranked_date
         row["mapper_id"] = mapper_id
-        row["difficulty_rating"] = beatmaps[version]
+        row["difficulty_rating"] = beatmaps.get(version, 0)
         return row
 
     beatmaps_df = beatmaps_df.apply(fill_metadatas, axis=1)

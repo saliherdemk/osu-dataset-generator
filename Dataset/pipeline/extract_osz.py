@@ -1,8 +1,9 @@
-import os
-import zipfile
 import argparse
-from tqdm import tqdm
+import os
 import shutil
+import zipfile
+
+from tqdm import tqdm
 
 
 def extract_osz(osz_file, output_folder):
@@ -39,6 +40,30 @@ def process_folder(input_folder, output_folder):
             pbar.update(1)
 
 
+def remove_banned_content(input_folder):
+    song_folders = os.listdir(input_folder)
+
+    for song_folder in song_folders:
+        song_path = os.path.join(input_folder, song_folder)
+
+        osu_files = [file for file in os.listdir(song_path) if file.endswith(".osu")]
+        with open(os.path.join(song_path, osu_files[0]), "r", encoding="utf-8") as f:
+            lines = f.readlines()
+
+        audio_filename = None
+        for line in lines:
+            if line.startswith("AudioFilename"):
+                audio_filename = line.split(":", 1)[1].strip()
+                break
+
+        norm_audio = audio_filename.strip().lower()
+        norm_files = [f.strip().lower() for f in os.listdir(song_path)]
+
+        if norm_audio not in norm_files:
+            shutil.rmtree(os.path.join(song_path))
+            print(f"Missing audio in {song_folder} → {repr(audio_filename)}. Removed")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Extract .osz files into corresponding folders."
@@ -54,6 +79,7 @@ def main():
     args = parser.parse_args()
 
     process_folder(args.input_folder, args.output_folder)
+    remove_banned_content(args.output_folder)
 
 
 if __name__ == "__main__":

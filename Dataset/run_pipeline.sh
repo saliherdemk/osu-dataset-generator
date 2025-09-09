@@ -40,8 +40,8 @@ python Dataset/pipeline/add_beatmaps_metadata.py --dataset_folder="$DATASET_FOLD
 echo "Filtering ranked beatmaps..."
 python Dataset/pipeline/filter_ranked.py --dataset_folder="$DATASET_FOLDER" --min_ranked_date=2011-01-01
 
-echo "Fixing corrupted audio..."
-python Dataset/pipeline/fix_corrupted_audio.py --dataset_folder="$DATASET_FOLDER"
+# echo "Fixing corrupted audio..."
+# python Dataset/pipeline/fix_corrupted_audio.py --dataset_folder="$DATASET_FOLDER"
 
 echo "Pipeline completed successfully!"
 

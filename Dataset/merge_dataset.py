@@ -11,24 +11,24 @@ def merge_datasets(folder_one, folder_two, output_folder):
 
     df_combined = pd.concat([df_one, df_two], ignore_index=True)
 
-    output_audio_folder = os.path.join(output_folder, "audio")
+    output_audio_folder = os.path.join(output_folder, "mels")
     os.makedirs(output_audio_folder, exist_ok=True)
 
     df_combined.to_csv(os.path.join(output_folder, "encoded.csv"), index=False)
 
-    audio_path_one = os.path.join(folder_one, "audio")
-    audio_path_two = os.path.join(folder_two, "audio")
+    audio_path_one = os.path.join(folder_one, "mels")
+    audio_path_two = os.path.join(folder_two, "mels")
     audio_folders_one = os.listdir(audio_path_one)
     audio_folders_two = os.listdir(audio_path_two)
 
     for f in audio_folders_one:
-        shutil.copytree(
+        shutil.move(
             os.path.join(audio_path_one, f),
             os.path.join(output_audio_folder, f),
         )
 
     for f in audio_folders_two:
-        shutil.copytree(
+        shutil.move(
             os.path.join(audio_path_two, f),
             os.path.join(output_audio_folder, f),
         )
