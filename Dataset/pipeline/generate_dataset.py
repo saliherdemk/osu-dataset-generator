@@ -47,7 +47,6 @@ def process_folder(input_folder, dataset_path):
                 data_exporter.write_data(data, id)
 
             pbar.update(1)
-    print(skipped_files)
     print(f"Skipped {len(skipped_files)} beatmaps that modes are not osu.")
 
     with tqdm(total=len(beatmap_folders), desc="Copying audio files") as pbar:

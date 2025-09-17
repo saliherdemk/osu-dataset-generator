@@ -42,19 +42,20 @@ class Formatter:
         )
         self.hit_objects_df = pd.read_csv(os.path.join(dataset_path, "hit_objects.csv"))
 
-        self.mel_folder, self.checkpoint_file = self.setup_output_paths()
+        self.checkpoint_file = self.setup_output_paths()
         self.audio_path = os.path.join(dataset_path, "audio")
         self.seperate_beatmap_id()
 
     def setup_output_paths(self):
-        mel_folder = os.path.join(self.dataset_path, "formatted", "mels")
-        os.makedirs(mel_folder, exist_ok=True)
+        formatted_folder = os.path.join(self.dataset_path, "formatted")
+        checkpoint_file = os.path.join(formatted_folder, "formatted.csv")
 
-        checkpoint_file = os.path.join(self.dataset_path, "formatted", "formatted.csv")
+        os.makedirs(formatted_folder, exist_ok=True)
+
         if not os.path.exists(checkpoint_file):
             pd.DataFrame(columns=COL_TYPES.keys()).to_csv(checkpoint_file, index=False)
 
-        return mel_folder, checkpoint_file
+        return checkpoint_file
 
     def seperate_beatmap_id(self):
         self.beatmaps_df["beatmap_id"] = (
@@ -124,37 +125,7 @@ class Formatter:
             )
         return pd.DataFrame(results)
 
-    def save_mel_spectrogram(self, song_id, song_path, chunk_size=512):
-        y, sr = librosa.load(song_path, sr=22050)
-        mel_spec = librosa.feature.melspectrogram(
-            y=y, sr=sr, n_fft=2048, hop_length=512, n_mels=128
-        )
-        log_mel_spec = librosa.power_to_db(mel_spec, ref=np.max)
-
-        log_mel_spec = log_mel_spec.T
-
-        n_chunks = int(np.ceil(log_mel_spec.shape[0] / chunk_size))
-        chunks = []
-        for i in range(n_chunks):
-            start = i * chunk_size
-            end = start + chunk_size
-            chunk = log_mel_spec[start:end]
-
-            if chunk.shape[0] < chunk_size:
-                pad_len = chunk_size - chunk.shape[0]
-                chunk = np.pad(chunk, ((0, pad_len), (0, 0)), mode="constant")
-
-            chunks.append(chunk)
-
-        # np.save(os.path.join(self.mel_folder, f"{song_id}.npy"), np.array(chunks))
-        for idx, c in enumerate(chunks):
-            np.save(os.path.join(self.mel_folder, f"{song_id}_{idx}.npy"), c)
-
-        # print(f"Saved {len(chunks)} chunks for song {song_id}")
-
-    def process_song(self, song_id, song_path):
-        self.save_mel_spectrogram(song_id, song_path)
-
+    def process_song(self, song_id):
         beatmap_data = self.hit_objects_df[
             self.hit_objects_df["beatmap_id"] == int(song_id)
         ].copy()
@@ -204,7 +175,7 @@ class Formatter:
         for song_id, path in tqdm(
             song_paths.items(), total=len(song_paths), desc="Processing songs"
         ):
-            df = self.process_song(song_id, path)
+            df = self.process_song(song_id)
             df.to_csv(self.checkpoint_file, mode="a", header=False, index=False)
 
     def get_already_processed_ids(self):

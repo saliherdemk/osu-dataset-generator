@@ -16,7 +16,6 @@ class BeatmapProcessor:
             self.break_points = self.parse_break_points()
 
     def verify_mode(self):
-        print(self.beatmapset_folder)
         with open(
             os.path.join(self.beatmapset_folder, self.osu_file), "r", encoding="utf-8"
         ) as f:
