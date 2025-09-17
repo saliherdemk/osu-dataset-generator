@@ -58,7 +58,7 @@ def process_folder(input_folder, dataset_path):
                 for f in os.listdir(entry_path)
                 if f.lower().endswith((".mp3", ".ogg"))
             ]
-            audio_folder = os.path.join(dataset_path, "audio", entry.split("-")[1])
+            audio_folder = os.path.join(dataset_path, "audio")
             os.makedirs(audio_folder, exist_ok=True)
 
             try:
@@ -85,10 +85,11 @@ def process_folder(input_folder, dataset_path):
                     continue
 
             audio_file = audio_files[audio_filename.lower()]
+            name, ext = os.path.splitext(audio_file)
 
             shutil.move(
                 os.path.join(entry_path, audio_file),
-                os.path.join(audio_folder, audio_file),
+                os.path.join(audio_folder, f"{entry.split("-")[1]}{ext}"),
             )
 
             pbar.update(1)

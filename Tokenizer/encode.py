@@ -63,7 +63,7 @@ def encode(beatmap):
 
     for _, row in beatmap.iterrows():
         hit_obj_type = row["type"]
-        hit_obj = ["<hit_object_start>"]
+        hit_obj = ["<hit_object_start>", str(int(row["time"]))]
 
         t = "type_" + row["type"]
         # x = f"x_{max(0, min(512, round(row["x"] / 32) * 32))}"
@@ -94,39 +94,15 @@ def encode(beatmap):
     return ",".join(encoded)
 
 
-def chunk_encoding(key, group, chunk_num, tok_to_id):
-    sr = 22050
-    hop_length = 512
-    chunk_size = 512
-
-    chunk_duration = (chunk_size * hop_length) / sr  # 11.889
-    group["time_sec"] = group["time"] / 1000
-
-    group["chunk_idx"] = (group["time_sec"] // chunk_duration).astype(int)
-
-    chunked_objects = group.groupby("chunk_idx")
+def beatmap_encoding(key, group):
     dataset = []
-
-    for chunk_idx in range(chunk_num):
-        if chunk_idx in chunked_objects.groups:
-            encoded = encode(chunked_objects.get_group(chunk_idx))
-        else:
-            encoded = ""
-
-        if chunk_idx == 0:
-            encoded = "<beatmap_start>," + encoded
-        if chunk_idx == chunk_num - 1:
-            encoded = encoded + ",<beatmap_end>"
-
-        if len(encoded):
-            dataset.append(
-                {
-                    "beatmap_id": key,
-                    "chunk": chunk_idx,
-                    # "tokenized": tokens_to_ids(encoded, tok_to_id),
-                    "tokenized": encoded,
-                }
-            )
+    encoded = "<beatmap_start>," + encode(group) + ",<beatmap_end>"
+    dataset.append(
+        {
+            "beatmap_id": key,
+            "tokenized": encoded,
+        }
+    )
 
     return pd.DataFrame(dataset)
 
@@ -136,18 +112,7 @@ def tokens_to_ids(text, tok_to_id):
     return ",".join(ids)
 
 
-def process(input_file, output_file, mel_folder):
-    song_ids = os.listdir(mel_folder)
-    chunk_sizes = {}
-    for song_id in song_ids:
-        beatmapset_id = song_id.split("_")[0]
-        chunk_sizes[beatmapset_id] = chunk_sizes.get(beatmapset_id, 0) + 1
-
-    dirname = os.path.dirname(__file__)
-    filename = os.path.join(dirname, "vocab/token2id.json")
-    with open(filename, "r") as f:
-        tok_to_id = json.load(f)
-
+def process(input_file, output_file):
     df = pd.read_csv(input_file)
 
     grouped = df.groupby("id")
@@ -155,8 +120,7 @@ def process(input_file, output_file, mel_folder):
     dataset = []
 
     for key, group in tqdm(grouped, desc="Tokenize beatmaps"):
-        chunk_num = chunk_sizes[key.split("-")[0]]
-        dataset.append(chunk_encoding(key, group, chunk_num, tok_to_id))
+        dataset.append(beatmap_encoding(key, group))
 
     dataset = pd.concat(dataset, ignore_index=True)
 
@@ -167,10 +131,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_file", required=True)
     parser.add_argument("--output_file", required=True)
-    parser.add_argument("--mel_folder", required=True)
     args = parser.parse_args()
 
-    process(args.input_file, args.output_file, args.mel_folder)
+    process(args.input_file, args.output_file)
 
 
 if __name__ == "__main__":

@@ -44,7 +44,9 @@ def filter_ranked_maps(dataset_folder, ranked_date, exclude):
 
     removed = []
     for folder in os.listdir(audio_folder):
-        if folder not in set([id.split("-")[0] for id in filtered_ids]):
+        name, ext = os.path.splitext(folder)
+
+        if name not in set([id.split("-")[0] for id in filtered_ids]):
             shutil.rmtree(os.path.join(audio_folder, folder))
             removed.append(folder)
     print(f"Removed {len(removed)} audio file.")
