@@ -66,13 +66,6 @@ def encode(beatmap):
         hit_obj = ["<hit_object_start>", str(int(row["time"]))]
 
         t = "type_" + row["type"]
-        # x = f"x_{max(0, min(512, round(row["x"] / 32) * 32))}"
-        # y = f"y_{max(0, min(384, round(row["y"] / 32) * 32))}"
-        # hit_sound = f"hit_sound_{row["hit_sound"]}"
-        # new_combo = f"new_combo_{int(row["new_combo"])}"
-        # sample_set = f"sample_set_{row["sample_set"]}"
-        # volume = f"vol_{round(row["volume"] / 10) * 10}"
-        # effects = f"effects_{correct_effect_value(row["effects"])}"
         delta_time = get_delta_time(row["delta_time"])
 
         repeat = "<start_repeat>,repeat_0,<end_repeat>"
