@@ -22,17 +22,9 @@ def get_chunks_for_hit(hit_start_ms, duration_ms, chunk_length_ms, chunk_stride_
 
 def normalize(df_exploded):
     chunk_length_ms = 10000
-    v_min, v_max = 0.04, 36.0
 
     df_exploded["hit_start_rel"] = df_exploded["hit_start_rel"] / chunk_length_ms
     df_exploded["hit_end_rel"] = df_exploded["hit_end_rel"] / chunk_length_ms
-
-    df_exploded["slider_velocity"] = (
-        np.log1p(df_exploded["slider_velocity"]) - np.log1p(v_min)
-    ) / (np.log1p(v_max) - np.log1p(v_min))
-
-    max_repeat = df_exploded["repeat"].max()
-    df_exploded["repeat"] = np.log1p(df_exploded["repeat"]) / np.log1p(max_repeat)
 
     type_onehot = pd.get_dummies(df_exploded["type"], prefix="type").astype(int)
     df_exploded = df_exploded.drop(columns=["type"])
@@ -66,14 +58,9 @@ def divide_tokens(df, chunk_length_sec, overlap_sec):
 
     df_exploded["hit_start_rel"] = df_exploded["hit_start_rel"].clip(lower=0)
 
-    mask = df_exploded["type"] == "circle"
-    df_exploded.loc[mask, "slider_velocity"] = 0.04
-
     cols = [
         "id",
         "type",
-        "repeat",
-        "slider_velocity",
         "chunk_id",
         "hit_start_rel",
         "hit_end_rel",
@@ -125,12 +112,12 @@ def divide_audio(audio_folder, embedding_folder, chunk_length_sec, overlap_sec):
             with torch.no_grad():
                 outputs = model(**inputs, output_hidden_states=True)
 
-            all_layer_hidden_states = torch.stack(outputs.hidden_states).squeeze()
-            time_reduced_hidden_states = all_layer_hidden_states.mean(-2)
+            all_layer_hidden_states = torch.stack(outputs.hidden_states)
+            layer_reduced = all_layer_hidden_states.mean(0)
 
             save_name = f"{beatmap_id}_chunk{chunk_idx}.pt"
             save_path = os.path.join(embedding_folder, save_name)
-            torch.save(time_reduced_hidden_states, save_path)
+            torch.save(layer_reduced, save_path)
 
 
 def main():
