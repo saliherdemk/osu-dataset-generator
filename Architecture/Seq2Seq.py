@@ -8,11 +8,14 @@ from tqdm import tqdm
 
 
 class Seq2Seq:
-    def __init__(self):
-        self.encoder = Encoder()
-        self.decoder = Decoder()
+    def __init__(self, lr):
+        dropout = 0.0
+        n_head = 2
+        num_layers = 2
+        self.encoder = Encoder(dropout=dropout, nhead=n_head, num_layers=num_layers)
+        self.decoder = Decoder(dropout=dropout, nhead=n_head, num_layers=num_layers)
         self.optimizer = torch.optim.Adam(
-            list(self.encoder.parameters()) + list(self.decoder.parameters()), lr=1e-4
+            list(self.encoder.parameters()) + list(self.decoder.parameters()), lr=lr
         )
         self.scheduler = torch.optim.lr_scheduler.StepLR(
             self.optimizer, step_size=5, gamma=0.5
@@ -38,7 +41,8 @@ class Seq2Seq:
         loss_fn_cont = nn.MSELoss()
 
         for epoch in range(epochs + 1, num_epochs):
-            epoch_loss = 0
+
+            epoch_loss, epoch_type_loss, epoch_cont_loss = 0, 0, 0
 
             pbar = tqdm(dataloader, desc=f"Epoch {epoch}", leave=False)
             for batch_idx, batch in enumerate(pbar):
@@ -70,10 +74,21 @@ class Seq2Seq:
                 self.optimizer.step()
 
                 epoch_loss += loss.item()
-                running_loss = epoch_loss / (batch_idx + 1)
-                pbar.set_postfix({"running_loss": f"{running_loss:.4f}"})
+                epoch_type_loss += loss_type.item()
+                epoch_cont_loss += loss_cont.item()
 
-            self.scheduler.step()
+                running_loss = epoch_loss / (batch_idx + 1)
+                running_type = epoch_type_loss / (batch_idx + 1)
+                running_cont = epoch_cont_loss / (batch_idx + 1)
+
+                pbar.set_postfix(
+                    {
+                        "loss": f"{running_loss:.4f}",
+                        "type": f"{running_type:.4f}",
+                        "cont": f"{running_cont:.4f}",
+                    }
+                )
+            # self.scheduler.step()
             print(f"Epoch {epoch} avg loss: {epoch_loss / len(dataloader):.4f}")
             if checkpoint_dir:
                 torch.save(

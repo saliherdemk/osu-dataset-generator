@@ -13,12 +13,13 @@ def main():
     parser.add_argument("--load_from", default=None)
     parser.add_argument("--save_to", default=None)
     parser.add_argument("--mode", default="train")
+    parser.add_argument("--lr", default=1e-4, type=float)
 
     args = parser.parse_args()
 
     dataloader = createDataLoader(args.dataset_folder, int(args.batch_size))
 
-    model = Seq2Seq()
+    model = Seq2Seq(args.lr)
 
     epochs = 0
 
@@ -26,7 +27,7 @@ def main():
         epochs = model.load_checkpoint(args.load_from)
 
     if args.mode == "train":
-        model.train(dataloader, args.save_to, args.num_epochs, epochs)
+        model.train(dataloader, args.save_to, int(args.num_epochs), epochs)
 
 
 if __name__ == "__main__":
