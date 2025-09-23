@@ -19,18 +19,21 @@ class BeatmapChunkDataset(Dataset):
     def __getitem__(self, idx):
         (beatmap_id, chunk_id), group = self.groups[idx]
 
-        features = torch.tensor(
-            group[
-                [
-                    "type_circle",
-                    "type_slider",
-                    "type_spinner",
-                    "hit_start_rel",
-                    "hit_end_rel",
-                ]
-            ].values,
+        # Convert one-hot columns to a single integer label
+        type_labels = torch.tensor(
+            group[["type_circle", "type_slider", "type_spinner"]].values.argmax(axis=1),
+            dtype=torch.long,  # use long for class labels
+        )
+
+        # Keep the other features as float
+        other_features = torch.tensor(
+            group[["hit_start_rel", "hit_end_rel"]].values,
             dtype=torch.float32,
         )
+
+        # Concatenate (if you want everything in one tensor)
+        features = torch.cat([type_labels.unsqueeze(1).float(), other_features], dim=1)
+
         beatmapset_id = beatmap_id.split("-")[0]
         chunk_audio_path = os.path.join(
             self.audio_folder, f"{beatmapset_id}_chunk{chunk_id}.pt"

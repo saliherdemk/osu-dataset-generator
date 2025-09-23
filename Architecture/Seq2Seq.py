@@ -10,8 +10,8 @@ from tqdm import tqdm
 class Seq2Seq:
     def __init__(self, lr):
         dropout = 0.0
-        n_head = 2
-        num_layers = 2
+        n_head = 4
+        num_layers = 4
         self.encoder = Encoder(dropout=dropout, nhead=n_head, num_layers=num_layers)
         self.decoder = Decoder(dropout=dropout, nhead=n_head, num_layers=num_layers)
         self.optimizer = torch.optim.Adam(
@@ -37,7 +37,6 @@ class Seq2Seq:
         self.encoder.train()
         self.decoder.train()
 
-        loss_fn_type = nn.CrossEntropyLoss()
         loss_fn_cont = nn.MSELoss()
 
         for epoch in range(epochs + 1, num_epochs):
@@ -54,7 +53,7 @@ class Seq2Seq:
                 tgt_key_padding_mask = batch["tgt_key_padding_mask"].to(device)
 
                 memory = self.encoder(audio, diff, ~audio_mask)
-                type_logits, cont_preds = self.decoder(
+                preds = self.decoder(
                     features,
                     memory,
                     tgt_causal_mask=tgt_causal_mask,
@@ -62,20 +61,15 @@ class Seq2Seq:
                     memory_key_padding_mask=~audio_mask,
                 )
 
-                type_target = features[..., :3].argmax(dim=-1)
-                cont_target = features[..., 3:]
+                cont_target = features
 
-                loss_type = loss_fn_type(type_logits.view(-1, 3), type_target.view(-1))
-                loss_cont = loss_fn_cont(cont_preds, cont_target)
-                loss = loss_type + loss_cont
+                loss = loss_fn_cont(preds, cont_target)
 
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
 
                 epoch_loss += loss.item()
-                epoch_type_loss += loss_type.item()
-                epoch_cont_loss += loss_cont.item()
 
                 running_loss = epoch_loss / (batch_idx + 1)
                 running_type = epoch_type_loss / (batch_idx + 1)
@@ -100,3 +94,53 @@ class Seq2Seq:
                     },
                     os.path.join(checkpoint_dir, f"checkpoint_epoch_{epoch}.pt"),
                 )
+
+    @torch.no_grad()
+    def generate_beatmap(model, audio, diff_rating, max_len=1000):
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        model.encoder.eval()
+        model.decoder.eval()
+        audio = audio.to(device)
+        diff_rating = diff_rating.to(device)
+
+        audio_mask = torch.ones(audio.shape[:2], dtype=torch.bool, device=device)
+        memory = model.encoder(audio, diff_rating, ~audio_mask)
+
+        tgt_seq = torch.zeros(1, 1, 3, device=device)
+
+        generated = []
+
+        for t in range(max_len):
+            seq_len = tgt_seq.size(1)
+
+            tgt_mask = torch.triu(
+                torch.ones(seq_len, seq_len, device=device) * float("-inf"), diagonal=1
+            )
+            tgt_key_padding_mask = torch.zeros(
+                1, seq_len, dtype=torch.bool, device=device
+            )
+            memory_key_padding_mask = torch.zeros(
+                1, memory.size(1), dtype=torch.bool, device=device
+            )
+
+            out = model.decoder(
+                tgt=tgt_seq,
+                memory=memory,
+                tgt_causal_mask=tgt_mask,
+                tgt_key_padding_mask=tgt_key_padding_mask,
+                memory_key_padding_mask=memory_key_padding_mask,
+            )
+
+            next_step = out[:, -1, :]
+
+            next_type = next_step[:, 0].round().clamp(0, 2)
+            next_start_end = next_step[:, 1:]  # keep floats
+
+            next_tgt = torch.cat([next_type.unsqueeze(-1), next_start_end], dim=-1)
+            generated.append(next_tgt.squeeze(0).cpu())
+
+            tgt_seq = torch.cat([tgt_seq, next_tgt.unsqueeze(1)], dim=1)
+
+        generated_seq = torch.stack(generated, dim=0)
+        return generated_seq

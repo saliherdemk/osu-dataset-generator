@@ -26,6 +26,7 @@ COL_TYPES = {
     "beatmap_id": "int64",
     "duration": "int64",
     "delta_time": "int64",
+    "tick": "int64",
 }
 
 
@@ -155,6 +156,28 @@ class Formatter:
             .fillna(beatmap_data["time"])
             .astype(int)
         )
+
+        def compute_tick(row):
+
+            tick = 0
+
+            if row["type"] == "slider":
+
+                slider_units = row["length"] / (row["slider_velocity"] * 100)
+
+                tick = int(round(slider_units * row["meter"])) * row["repeat"]
+
+            elif row["type"] == "spinner":
+
+                spinner_duration = row["spinner_time"] - row["time"]
+
+                beats = spinner_duration / row["beat_length"]
+
+                tick = int(round(beats * row["meter"]))
+
+            return tick
+
+        beatmap_data["tick"] = beatmap_data.apply(compute_tick, axis=1)
 
         beatmap_data.drop(columns="length", inplace=True)
         beatmap_data = beatmap_data[COL_TYPES.keys()].astype(COL_TYPES)

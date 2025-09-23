@@ -15,7 +15,7 @@ class Decoder(nn.Module):
     ):
         super().__init__()
 
-        self.input_proj = nn.Linear(5, d_model)  # 3 type + 2 timing
+        self.input_proj = nn.Linear(3, d_model)
 
         self.pos_embedding = nn.Parameter(torch.randn(1, max_seq_len, d_model))
 
@@ -28,8 +28,7 @@ class Decoder(nn.Module):
         )
         self.decoder = nn.TransformerDecoder(decoder_layer, num_layers=num_layers)
 
-        self.type_head = nn.Linear(d_model, num_types)
-        self.cont_head = nn.Linear(d_model, 2)
+        self.final = nn.Linear(d_model, 3)
 
     def forward(
         self,
@@ -52,7 +51,6 @@ class Decoder(nn.Module):
             memory_key_padding_mask=memory_key_padding_mask,
         )
 
-        type_logits = self.type_head(out)
-        cont_preds = self.cont_head(out)
+        logits = self.final(out)
 
-        return type_logits, cont_preds
+        return logits
