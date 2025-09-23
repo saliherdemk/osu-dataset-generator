@@ -35,43 +35,12 @@ def normalize(df_exploded):
     return df_exploded
 
 
-def divide_tokens(df, chunk_length_sec, overlap_sec):
-    chunk_length_ms = chunk_length_sec * 1000
-    chunk_stride_ms = (chunk_length_sec - overlap_sec) * 1000
+def divide_tokens(df, hit_obj_count=5):
+    df["end"] = df["time"] + df["duration"]
 
-    df["chunk_id"] = df.apply(
-        lambda row: get_chunks_for_hit(
-            row["time"], row["duration"], chunk_length_ms, chunk_stride_ms
-        ),
-        axis=1,
-    )
+    df["group"] = df.groupby("id").cumcount() // hit_obj_count
 
-    df_exploded = df.explode("chunk_id").reset_index(drop=True)
-
-    df_exploded["chunk_start"] = df_exploded["chunk_id"] * chunk_stride_ms
-
-    df_exploded["hit_start_rel"] = df_exploded["time"] - df_exploded["chunk_start"]
-
-    df_exploded["hit_end_rel"] = (
-        df_exploded["hit_start_rel"] + df_exploded["duration"]
-    ).clip(upper=chunk_length_ms)
-
-    df_exploded["hit_start_rel"] = df_exploded["hit_start_rel"].clip(lower=0)
-
-    cols = [
-        "id",
-        "type",
-        "chunk_id",
-        "hit_start_rel",
-        "hit_end_rel",
-        "difficulty_rating",
-    ]
-
-    df_exploded = df_exploded[cols]
-
-    df_exploded = normalize(df_exploded)
-
-    return df_exploded
+    return df
 
 
 def divide_audio(audio_folder, embedding_folder, chunk_length_sec, overlap_sec):
@@ -125,19 +94,16 @@ def main():
     parser.add_argument("--input_folder", required=True)
     parser.add_argument("--output_folder", required=True)
 
-    chunk_length_sec = 10
-    overlap_sec = 5
-
     args = parser.parse_args()
 
     formatted_df = pd.read_csv(os.path.join(args.input_folder, "formatted.csv"))
-    chunked_df = divide_tokens(formatted_df, chunk_length_sec, overlap_sec)
+    chunked_df = divide_tokens(formatted_df)
 
-    audio_folder = os.path.join(args.input_folder, "audio")
-    embedding_folder = os.path.join(args.output_folder, "audio")
-    os.makedirs(embedding_folder, exist_ok=True)
-
-    divide_audio(audio_folder, embedding_folder, chunk_length_sec, overlap_sec)
+    # audio_folder = os.path.join(args.input_folder, "audio")
+    # embedding_folder = os.path.join(args.output_folder, "audio")
+    # os.makedirs(embedding_folder, exist_ok=True)
+    #
+    # divide_audio(audio_folder, embedding_folder, chunk_length_sec, overlap_sec)
 
     chunked_df.to_csv(os.path.join(args.output_folder, "chunked.csv"), index=False)
 
