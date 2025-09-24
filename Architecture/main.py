@@ -18,6 +18,9 @@ def main():
     args = parser.parse_args()
 
     dataloader = createDataLoader(args.dataset_folder, int(args.batch_size))
+    for data in dataloader:
+        print(data)
+    return
 
     model = Seq2Seq(args.lr)
 

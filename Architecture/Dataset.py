@@ -2,6 +2,7 @@ import os
 
 import pandas as pd
 import torch
+import torchaudio
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader, Dataset
 
@@ -10,8 +11,16 @@ class BeatmapChunkDataset(Dataset):
     def __init__(self, input_folder):
         self.audio_folder = os.path.join(input_folder, "audio")
 
-        df = pd.read_csv(os.path.join(input_folder, "chunked.csv"))
-        self.groups = list(df.groupby(["id", "chunk_id"]))
+        chunk_df = pd.read_csv(os.path.join(input_folder, "chunked.csv"))
+        self.chunk_limits = pd.read_csv(os.path.join(input_folder, "chunk_limits.csv"))
+        self.groups = list(chunk_df.groupby(["id", "chunk_id"]))
+
+    def get_audio_path(self, beatmapset_id):
+        for ext in (".mp3", ".ogg"):
+            path = os.path.join(self.audio_folder, beatmapset_id + ext)
+            if os.path.exists(path):
+                return path
+        raise FileNotFoundError(f"No audio file found for {beatmapset_id}")
 
     def __len__(self):
         return len(self.groups)
@@ -19,75 +28,69 @@ class BeatmapChunkDataset(Dataset):
     def __getitem__(self, idx):
         (beatmap_id, chunk_id), group = self.groups[idx]
 
-        # Convert one-hot columns to a single integer label
-        type_labels = torch.tensor(
-            group[["type_circle", "type_slider", "type_spinner"]].values.argmax(axis=1),
-            dtype=torch.long,  # use long for class labels
-        )
-
-        # Keep the other features as float
-        other_features = torch.tensor(
-            group[["hit_start_rel", "hit_end_rel"]].values,
-            dtype=torch.float32,
-        )
-
-        # Concatenate (if you want everything in one tensor)
-        features = torch.cat([type_labels.unsqueeze(1).float(), other_features], dim=1)
-
         beatmapset_id = beatmap_id.split("-")[0]
-        chunk_audio_path = os.path.join(
-            self.audio_folder, f"{beatmapset_id}_chunk{chunk_id}.pt"
+        audio_path = self.get_audio_path(beatmapset_id)
+
+        limits = self.chunk_limits[
+            (self.chunk_limits["id"] == beatmap_id)
+            & (self.chunk_limits["chunk_id"] == chunk_id)
+        ].iloc[0]
+
+        start_ms, end_ms = limits["start"], limits["end"]
+
+        waveform, sr = torchaudio.load(audio_path)
+
+        start_frame = int(sr * (start_ms / 1000))
+
+        is_last_chunk = (
+            chunk_id
+            == self.chunk_limits[self.chunk_limits["id"] == beatmap_id][
+                "chunk_id"
+            ].max()
         )
 
-        difficulty_rating = torch.tensor(
-            [group.iloc[0]["difficulty_rating"]], dtype=torch.float32
+        if is_last_chunk:
+            waveform = waveform[:, start_frame:]
+        else:
+            end_frame = int(sr * (end_ms / 1000))
+            waveform = waveform[:, start_frame:end_frame]
+
+        torchaudio.save(
+            f"/home/saliherdemk/try_dataset/chunked/{beatmap_id}_{chunk_id}.wav",
+            waveform,
+            sr,
         )
 
         return {
-            "beatmap_id": beatmap_id,
+            "id": beatmap_id,
             "chunk_id": chunk_id,
-            "features": features,
-            "audio": torch.load(chunk_audio_path),
-            "difficulty_rating": difficulty_rating,
+            "audio": waveform,
+            "sample_rate": sr,
+            "hit_objects": group,
         }
 
 
 def collate_fn(batch):
-    beatmap_ids = [item["beatmap_id"] for item in batch]
-    chunk_ids = [item["chunk_id"] for item in batch]
+    # batch is a list of dicts from __getitem__
+    audios = [item["audio"].squeeze(0).T for item in batch]
+    # -> shape: (time, channels) instead of (channels, time)
+    # assuming mono audio, so squeeze(0) is safe
 
-    features_list = [item["features"] for item in batch]
-    features_padded = pad_sequence(features_list, batch_first=True, padding_value=0.0)
+    lengths = [audio.shape[0] for audio in audios]  # keep track of true lengths
 
-    tgt_key_padding_mask = torch.zeros(features_padded.shape[:2], dtype=torch.bool)
-    for i, feat in enumerate(features_list):
-        tgt_key_padding_mask[i, : feat.shape[0]] = 1
+    # pad to max length in the batch
+    padded_audios = pad_sequence(audios, batch_first=True)  # (batch, max_len, channels)
 
-    max_tgt_len = features_padded.size(1)
-    tgt_causal_mask = torch.triu(
-        torch.ones(max_tgt_len, max_tgt_len, dtype=torch.bool), diagonal=1
-    )
-
-    audio_list = [item["audio"].squeeze(0) for item in batch]
-    audio_padded = pad_sequence(audio_list, batch_first=True, padding_value=0.0)
-
-    audio_mask = torch.zeros(audio_padded.shape[:2], dtype=torch.bool)
-    for i, a in enumerate(audio_list):
-        audio_mask[i, : a.shape[0]] = 1
-
-    difficulty_ratings = torch.tensor(
-        [item["difficulty_rating"] for item in batch], dtype=torch.float
-    ).unsqueeze(1)
+    # put back to (batch, channels, time)
+    padded_audios = padded_audios.permute(0, 2, 1)
 
     return {
-        "beatmap_ids": beatmap_ids,
-        "chunk_ids": torch.tensor(chunk_ids, dtype=torch.long),
-        "features": features_padded,
-        "tgt_key_padding_mask": tgt_key_padding_mask,
-        "tgt_causal_mask": tgt_causal_mask,
-        "audio": audio_padded,
-        "audio_mask": audio_mask,
-        "difficulty_rating": difficulty_ratings,
+        "id": [item["id"] for item in batch],
+        "chunk_id": [item["chunk_id"] for item in batch],
+        "audio": padded_audios,
+        "lengths": torch.tensor(lengths),  # store actual lengths before padding
+        "sample_rate": batch[0]["sample_rate"],  # assume consistent sr
+        "hit_objects": [item["hit_objects"] for item in batch],
     }
 
 
