@@ -1,6 +1,5 @@
 import argparse
 import os
-import shutil
 
 import pandas as pd
 
@@ -47,7 +46,7 @@ def filter_ranked_maps(dataset_folder, ranked_date, exclude):
         name, ext = os.path.splitext(folder)
 
         if name not in set([id.split("-")[0] for id in filtered_ids]):
-            shutil.rmtree(os.path.join(audio_folder, folder))
+            os.remove(os.path.join(audio_folder, folder))
             removed.append(folder)
     print(f"Removed {len(removed)} audio file.")
 

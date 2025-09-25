@@ -9,14 +9,15 @@ import torch
 from tqdm import tqdm
 
 
-def divide_tokens(df):
+def divide_tokens(df, max_interval=5000):
     df["end"] = df["time"] + df["duration"]
 
     grouped = df.groupby("id")
 
-    def assign_chunks_by_interval(group, max_interval=5000):
-        chunk_id = 0
-        chunk_start = 0
+    def assign_chunks_by_interval(group):
+        min_time = group["time"].min()
+        chunk_id = min_time // max_interval
+        chunk_start = chunk_id * max_interval
         chunk_ids = []
 
         for t in group["time"]:
@@ -33,14 +34,14 @@ def divide_tokens(df):
 
     grouped = df.groupby(["id", "chunk_id"])
 
-    last_chunk_end = 0
+    last_chunk_end = None
     prev_id = None
 
     chunk_limits = []
 
     for (id_val, chunk_id), group in grouped:
         if id_val != prev_id:
-            last_chunk_end = 0
+            last_chunk_end = chunk_id * max_interval
             prev_id = id_val
         end = group["end"].max()
         chunk_limits.append([id_val, chunk_id, last_chunk_end, end])
@@ -49,6 +50,23 @@ def divide_tokens(df):
 
     cols = ["id", "chunk_id", "delta_time_tick", "duration_tick", "difficulty_rating"]
     limits_df = pd.DataFrame(chunk_limits, columns=["id", "chunk_id", "start", "end"])
+
+    grouped = limits_df.groupby("id")
+    new_rows = []
+    for id_val, group in grouped:
+        min_chunk = group["chunk_id"].min()
+        while min_chunk != 0:
+            new_row = {
+                "id": id_val,
+                "chunk_id": min_chunk - 1,
+                "start": (min_chunk - 1) * max_interval,
+                "end": min_chunk * max_interval,
+            }
+            new_rows.append(new_row)
+            min_chunk -= 1
+
+    limits_df = pd.concat([limits_df, pd.DataFrame(new_rows)], ignore_index=True)
+    limits_df = limits_df.sort_values(by=["id", "chunk_id"]).reset_index(drop=True)
 
     return df[cols], limits_df
 
