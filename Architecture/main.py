@@ -20,6 +20,7 @@ def main():
     dataloader = createDataLoader(args.dataset_folder, int(args.batch_size))
     for data in dataloader:
         print(data)
+        break
     return
 
     model = Seq2Seq(args.lr)
