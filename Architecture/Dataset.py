@@ -91,51 +91,46 @@ class BeatmapChunkDataset(Dataset):
         ]
         df = df.copy()
 
-        df["start"] = df["time"]
-        df["end"] = df["time"] + df["duration"].replace(0, 1)
-
         frame_hop = 20
         frame_starts = np.arange(chunk_start, chunk_end + frame_hop, frame_hop)
         frame_ends = frame_starts + frame_hop
 
-        frames = pd.DataFrame({"frame_start": frame_starts, "frame_end": frame_ends})
+        fs = frame_starts[:, np.newaxis]
+        fe = frame_ends[:, np.newaxis]
 
-        intervals = df[["start", "end"]].values
-        has_hit = []
-        start_offsets = []
-        end_offsets = []
+        starts = df["time"].values
+        ends = (df["time"] + df["duration"].replace(0, 1)).values
 
-        for fs, fe in zip(frames["frame_start"], frames["frame_end"]):
-            active = [(s, e) for s, e in intervals if (fs < e) and (fe > s)]
-            has_hit.append(1 if active else 0)
+        overlaps = (fs < ends) & (fe > starts)
 
-            start_offset = 0
-            for s, e in active:
-                if fs <= s < fe:
-                    start_offset = s - fs
-            start_offsets.append(start_offset)
+        has_hit = (overlaps.sum(axis=1) > 0).astype(int)
 
-            end_offset = 0
-            for s, e in active:
-                if fs < e <= fe:
-                    end_offset = e - fs
-            end_offsets.append(end_offset)
-
-        frame_df = pd.DataFrame(
-            {
-                "frame_start": frame_starts,
-                "frame_end": frame_ends,
-                "has_hit": has_hit,
-                "start_offset": start_offsets,
-                "end_offset": end_offsets,
-            }
+        start_conditions = (fs <= starts) & (starts < fe) & overlaps
+        marked_offsets_per_frame = np.where(
+            start_conditions, starts - fs.flatten()[:, np.newaxis], 0
+        ).max(axis=1)
+        start_offsets = np.where(
+            start_conditions.any(axis=1), marked_offsets_per_frame, 0
         )
 
-        has_hit = np.array(has_hit)
-        start_offsets = np.array(start_offsets)
-        end_offsets = np.array(end_offsets)
+        end_conditions = (fs < ends) & (ends <= fe) & overlaps
+        end_offsets = np.where(
+            end_conditions.any(axis=1),
+            np.where(end_conditions, ends - fs.flatten()[:, np.newaxis], 0).max(axis=1),
+            0,
+        )
 
-        frame_df.to_csv("/home/saliherdemk/try_dataset/frames.csv", index=False)
+        # frame_df = pd.DataFrame(
+        #     {
+        #         "frame_start": frame_starts,
+        #         "frame_end": frame_ends,
+        #         "has_hit": has_hit,
+        #         "start_offset": start_offsets,
+        #         "end_offset": end_offsets,
+        #     }
+        # )
+        #
+        # frame_df.to_csv("/home/saliherdemk/try_dataset/frames.csv", index=False)
 
         has_hit = np.array(has_hit)
         start_offsets = np.array(start_offsets)
