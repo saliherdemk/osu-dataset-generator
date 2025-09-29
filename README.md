@@ -1,5 +1,7 @@
 # osu! Beatmap Processing and AI Generator
 
+Most recent updates on 'frame-wise' branch.
+
 More features extracted, a more comprehensive version of the process lives on the master branch. Deprecated in favor of the seq2seq model for tokenization.
 
 
