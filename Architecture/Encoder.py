@@ -2,49 +2,83 @@ import torch
 import torch.nn as nn
 
 
-class Encoder(nn.Module):
+class AudioEncoder(nn.Module):
+    def __init__(self):
+        super().__init__()
+        in_channels = 2  # mel + diff rating
+        self.c1 = nn.Conv2d(in_channels, 32, kernel_size=(3, 3), padding=1)
+        self.bn1 = nn.BatchNorm2d(32)
+        self.pool1 = nn.MaxPool2d(kernel_size=(1, 2))
+
+        self.c2 = nn.Conv2d(32, 64, kernel_size=(3, 3), padding=1)
+        self.bn2 = nn.BatchNorm2d(64)
+        self.pool2 = nn.MaxPool2d(kernel_size=(1, 2))
+
+    def forward(self, audio, diff_rating):
+        batch_size, num_chunks, time, mel = audio.shape
+
+        x = torch.stack([audio, diff_rating], dim=1)
+
+        x = x.permute(0, 2, 1, 3, 4)
+        x = x.reshape(batch_size * num_chunks, 2, time, mel)
+
+        x = torch.relu(self.c1(x))
+        x = self.bn1(x)
+        x = self.pool1(x)
+
+        x = torch.relu(self.c2(x))
+        x = self.bn2(x)
+        x = self.pool2(x)
+
+        x = x.permute(0, 2, 1, 3)
+        x = x.reshape(batch_size, num_chunks, x.size(1), -1)
+
+        return x
+
+
+class TemporalEncoder(nn.Module):
     def __init__(
-        self,
-        input_dim=768,
-        emb_dim=1023,
-        max_seq_len=1000,
-        nhead=8,
-        num_layers=6,
-        dim_feedforward=2048,
-        dropout=0.1,
+        self, input_size=1024, output_size=3, hidden_size=512, num_layers=2, dropout=0.0
     ):
         super().__init__()
-        self.conv1 = nn.Conv1d(in_channels=input_dim, out_channels=256, kernel_size=1)
-        self.relu = nn.ReLU()
-        self.conv2 = nn.Conv1d(in_channels=256, out_channels=emb_dim, kernel_size=1)
-
-        d_model = emb_dim + 1
-
-        self.pos_embedding = nn.Parameter(
-            torch.randn(1, max_seq_len, d_model)
-        )  # [1, seq_len, d_model]
-        encoder_layer = nn.TransformerEncoderLayer(
-            d_model=d_model,
-            nhead=nhead,
-            dim_feedforward=dim_feedforward,
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+        self.lstm = nn.LSTM(
+            input_size=input_size,
+            hidden_size=hidden_size,
+            num_layers=num_layers,
+            bidirectional=True,
+            batch_first=False,
             dropout=dropout,
-            batch_first=True,
         )
-        self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+        self.fc = nn.Linear(2 * hidden_size, output_size)
 
-    def forward(self, x, diff_rating, audio_mask):
-        # x: [batch, seq_len, d_model]
-        x = x.permute(0, 2, 1)  # [batch, d_model, seq_len]
-        x = self.conv1(x)
-        x = self.relu(x)
-        x = self.conv2(x)  # [batch, d_model, seq_len]
-        x = x.permute(0, 2, 1)  # [batch, seq_len, d_model]
+    def forward(self, x):
+        chunk_num = x.shape[1]
+        outputs = []
+        h, c = None, None
 
-        seq_len = x.size(1)
-        diff_rating = diff_rating.unsqueeze(1).expand(-1, seq_len, -1)
-        x = torch.cat([x, diff_rating], dim=-1)
+        for i in range(chunk_num):
+            chunk = x[:, i, :, :]
+            chunk = chunk.permute(1, 0, 2)
+            out, (h, c) = self.lstm(chunk, (h, c) if h is not None else None)
 
-        x = x + self.pos_embedding[:, :seq_len, :]
-        out = self.encoder(x, src_key_padding_mask=audio_mask)
+            out = out.permute(1, 0, 2)
+            out = torch.sigmoid(self.fc(out))
+            outputs.append(out)
 
-        return out
+        outputs = torch.stack(outputs, dim=1)
+        return outputs
+
+
+class TimingModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+        self.audioEncoder = AudioEncoder()
+        self.temporalEncoder = TemporalEncoder()
+
+    def forward(self, audio, diff_rating):
+        x = self.audioEncoder(audio, diff_rating)
+        x = self.temporalEncoder(x)
+        return x

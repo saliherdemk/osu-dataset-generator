@@ -1,6 +1,6 @@
 import argparse
 
-from Seq2Seq import Seq2Seq
+from Encoder import TimingModel
 
 from Dataset import createDataLoader
 
@@ -19,19 +19,13 @@ def main():
 
     dataloader = createDataLoader(args.dataset_folder, int(args.batch_size))
     for data in dataloader:
-        print(data)
+        print(data["has_hit"].shape)
+        print(data["start_offsets"].shape)
+        print(data["end_offsets"].shape)
+
+        model = TimingModel()
+        print(model(data["audio"], data["difficulty_rating"]).shape)
         break
-    return
-
-    model = Seq2Seq(args.lr)
-
-    epochs = 0
-
-    if args.load_from:
-        epochs = model.load_checkpoint(args.load_from)
-
-    if args.mode == "train":
-        model.train(dataloader, args.save_to, int(args.num_epochs), epochs)
 
 
 if __name__ == "__main__":
