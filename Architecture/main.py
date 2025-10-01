@@ -1,6 +1,6 @@
 import argparse
 
-from Encoder import TimingModel
+from TimingModel import TimingModel
 
 from Dataset import createDataLoader
 

@@ -1,64 +1,32 @@
 import os
-import random
 from collections import defaultdict
 
 import librosa
 import numpy as np
 import pandas as pd
-import soundfile as sf
 import torch
 from torch.utils.data import DataLoader, Dataset
 
+from config import CHUNK_LENGTH_SEC, HOP_LENGTH, N_FFT, N_MELS, SR, STEP_LENGTH_SEC
+
 
 class BeatmapChunkDataset(Dataset):
-    def __init__(self, input_folder, chunk_length_sec=10, step_length_sec=5, sr=22050):
+    def __init__(self, input_folder):
         self.input_df = pd.read_csv(os.path.join(input_folder, "formatted.csv"))
         self.beatmaps = list(self.input_df["id"].unique())
-        self.audio_folder = os.path.join(input_folder, "audio")
         self.chunks_folder = os.path.join(input_folder, "chunks")
         os.makedirs(self.chunks_folder, exist_ok=True)
 
-        self.chunk_size = int(chunk_length_sec * sr)
-        self.step_size = int(step_length_sec * sr)
-        self.sr = sr
-        self.chunks = defaultdict(list)
+        self.chunks = self.get_chunks()
 
-        self.divide_audio()
-
-    def save_audio_chunk(self, base_name, chunk_idx, chunk_audio):
-        if len(chunk_audio) < self.chunk_size:
-            pad_len = self.chunk_size - len(chunk_audio)
-            chunk_audio = np.pad(chunk_audio, (0, pad_len), mode="constant")
-
-        chunk_filename = f"{base_name}_{chunk_idx}.wav"
-        chunk_path = os.path.join(self.chunks_folder, chunk_filename)
-
-        sf.write(chunk_path, chunk_audio, self.sr)
-        self.chunks[base_name].append(chunk_idx)
-
-    def divide_audio(self):
-        files = os.listdir(self.audio_folder)
+    def get_chunks(self):
+        files = os.listdir(self.chunks_folder)
+        chunks = defaultdict(list)
         for f in files:
-            full_path = os.path.join(self.audio_folder, f)
-            base_name, _ = os.path.splitext(f)
-
-            y, _ = librosa.load(full_path, sr=self.sr)
-            total_samples = len(y)
-
-            start = 0
-            chunk_idx = 0
-            while start + self.chunk_size <= total_samples:
-                end = start + self.chunk_size
-                chunk_audio = y[start:end]
-
-                self.save_audio_chunk(base_name, chunk_idx, chunk_audio)
-
-                start += self.step_size
-                chunk_idx += 1
-
-            if start < total_samples:
-                last_chunk = y[start:]
-                self.save_audio_chunk(base_name, chunk_idx, last_chunk)
+            filename, _ = os.path.splitext(f)
+            [beatmap_id, chunk_id] = filename.split("_")
+            chunks[beatmap_id].append(int(chunk_id))
+        return chunks
 
     def __len__(self):
         return len(self.beatmaps)
@@ -76,21 +44,21 @@ class BeatmapChunkDataset(Dataset):
         beatmapset = beatmap.split("-")[0]
         audio_file = os.path.join(self.chunks_folder, f"{beatmapset}_{chunk_id}.wav")
 
-        y, _ = librosa.load(audio_file, sr=self.sr)
+        y, _ = librosa.load(audio_file, sr=SR)
 
         mel_spectrogram = librosa.feature.melspectrogram(
             y=y,
-            sr=self.sr,
-            n_fft=512,
-            hop_length=441,  # 20 ms
-            n_mels=64,
+            sr=SR,
+            n_fft=N_FFT,
+            hop_length=HOP_LENGTH,
+            n_mels=N_MELS,
         )
 
         log_mel_spectrogram = librosa.power_to_db(mel_spectrogram, ref=np.max)
         audio = log_mel_spectrogram.T
 
-        chunk_start = 5000 * chunk_id
-        chunk_end = chunk_start + 10000
+        chunk_start = STEP_LENGTH_SEC * 1000 * chunk_id
+        chunk_end = chunk_start + (CHUNK_LENGTH_SEC * 1000)
         df = self.input_df
         difficulty_rating = np.full(
             audio.shape, df["difficulty_rating"].iloc[0], dtype=float
@@ -102,7 +70,7 @@ class BeatmapChunkDataset(Dataset):
         ]
         df = df.copy()
 
-        frame_hop = 20
+        frame_hop = HOP_LENGTH * 1000 / SR  # 20 ms
         frame_starts = np.arange(chunk_start, chunk_end + frame_hop, frame_hop)
         frame_ends = frame_starts + frame_hop
 
