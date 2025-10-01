@@ -1,11 +1,17 @@
 import os
+import sys
 from collections import defaultdict
+from pathlib import Path
 
 import librosa
 import numpy as np
 import pandas as pd
 import torch
 from torch.utils.data import DataLoader, Dataset
+
+project_root = Path(__file__).parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
 from config import CHUNK_LENGTH_SEC, HOP_LENGTH, N_FFT, N_MELS, SR, STEP_LENGTH_SEC
 
@@ -79,7 +85,7 @@ class BeatmapChunkDataset(Dataset):
 
         if df.empty:
             num_frames = len(frame_starts)
-            has_hit = np.zeros(num_frames, dtype=int)
+            has_hit = np.zeros(num_frames, dtype=float)
             start_offsets = np.zeros(num_frames, dtype=float)
             end_offsets = np.zeros(num_frames, dtype=float)
         else:
@@ -88,7 +94,7 @@ class BeatmapChunkDataset(Dataset):
 
             overlaps = (fs < ends) & (fe > starts)
 
-            has_hit = (overlaps.sum(axis=1) > 0).astype(int)
+            has_hit = (overlaps.sum(axis=1) > 0).astype(float)
 
             start_conditions = (fs <= starts) & (starts < fe) & overlaps
             marked_offsets_per_frame = np.where(
@@ -107,22 +113,22 @@ class BeatmapChunkDataset(Dataset):
                 0,
             )
 
-        frame_df = pd.DataFrame(
-            {
-                "frame_start": frame_starts,
-                "frame_end": frame_ends,
-                "has_hit": has_hit,
-                "start_offset": start_offsets,
-                "end_offset": end_offsets,
-            }
-        )
-
-        frame_df.to_csv("/home/saliherdemk/try_dataset/frames.csv", index=False)
+        # frame_df = pd.DataFrame(
+        #     {
+        #         "frame_start": frame_starts,
+        #         "frame_end": frame_ends,
+        #         "has_hit": has_hit,
+        #         "start_offset": start_offsets,
+        #         "end_offset": end_offsets,
+        #     }
+        # )
+        #
+        # frame_df.to_csv("/home/saliherdemk/try_dataset/frames.csv", index=False)
 
         audio_tensor = torch.tensor(audio, dtype=torch.float32)
         diff_tensor = torch.tensor(difficulty_rating, dtype=torch.float32)
 
-        has_hit = torch.tensor(has_hit, dtype=torch.int32)
+        has_hit = torch.tensor(has_hit, dtype=torch.float32)
         start_offsets = torch.tensor(start_offsets, dtype=torch.float32)
         end_offsets = torch.tensor(end_offsets, dtype=torch.float32)
 
