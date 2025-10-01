@@ -48,6 +48,8 @@ def owbce(
 def train(dataloader, model, save_to, num_epochs, lr, epoch):
     criterion_bce = nn.BCEWithLogitsLoss(reduction="none")
     kernel, kernel_padding = create_kernel()
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    model.train()
 
     if save_to:
         os.makedirs(save_to, exist_ok=True)
@@ -61,6 +63,8 @@ def train(dataloader, model, save_to, num_epochs, lr, epoch):
             gt_hit_logits = data["has_hit"]
             gt_hit_logits = gt_hit_logits.reshape(-1, gt_hit_logits.shape[2])
 
+            optimizer.zero_grad()
+
             y_pred = model(data["audio"], data["difficulty_rating"])
             y_pred_hit_logits = y_pred[..., 0]
             y_pred_hit_logits = y_pred_hit_logits.reshape(-1, y_pred.shape[2])
@@ -73,7 +77,9 @@ def train(dataloader, model, save_to, num_epochs, lr, epoch):
 
             l_owbce_weighted = omega * l_bce_per_frame
             final_owbce_loss = l_owbce_weighted.mean()
-            epoch_loss += final_owbce_loss
+            final_owbce_loss.backward()
+            optimizer.step()
+            epoch_loss += final_owbce_loss.item()
 
             break
         if save_to:
