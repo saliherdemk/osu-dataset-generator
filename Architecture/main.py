@@ -110,6 +110,10 @@ def main():
     args = parser.parse_args()
 
     dataloader = createDataLoader(args.dataset_folder, int(args.batch_size))
+    for data in dataloader:
+        print(data)
+        break
+    return
 
     model = TimingModel()
     epoch = 0

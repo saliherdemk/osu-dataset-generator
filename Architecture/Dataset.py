@@ -1,6 +1,5 @@
 import os
 import sys
-from collections import defaultdict
 from pathlib import Path
 
 import librosa
@@ -8,77 +7,91 @@ import numpy as np
 import pandas as pd
 import torch
 from torch.utils.data import DataLoader, Dataset
+from transformers import ASTForAudioClassification, AutoFeatureExtractor
 
 project_root = Path(__file__).parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-from config import CHUNK_LENGTH_SEC, HOP_LENGTH, N_FFT, N_MELS, SR, STEP_LENGTH_SEC
+import soundfile as sf
+
+from config import CHUNK_LENGTH_SEC, HOP_LENGTH, SR
 
 
 class BeatmapChunkDataset(Dataset):
     def __init__(self, input_folder):
         self.input_df = pd.read_csv(os.path.join(input_folder, "formatted.csv"))
+        self.audio_folder = os.path.join(input_folder, "audio")
         self.beatmaps = list(self.input_df["id"].unique())
-        self.chunks_folder = os.path.join(input_folder, "chunks")
-        os.makedirs(self.chunks_folder, exist_ok=True)
-
-        self.chunks = self.get_chunks()
-
-    def get_chunks(self):
-        files = os.listdir(self.chunks_folder)
-        chunks = defaultdict(list)
-        for f in files:
-            filename, _ = os.path.splitext(f)
-            [beatmap_id, chunk_id] = filename.split("_")
-            chunks[beatmap_id].append(int(chunk_id))
-        return chunks
+        self.feature_extractor = AutoFeatureExtractor.from_pretrained(
+            "MIT/ast-finetuned-audioset-10-10-0.4593"
+        )
 
     def __len__(self):
         return len(self.beatmaps)
 
     def __getitem__(self, idx):
-        beatmap = self.beatmaps[idx]
-        beatmapset = beatmap.split("-")[0]
-        beatmap_data = [
-            self.get_chunk_data(beatmap, chunk_id)
-            for chunk_id in self.chunks[beatmapset]
-        ]
-        return beatmap_data
-
-    def get_chunk_data(self, beatmap, chunk_id):
-        beatmapset = beatmap.split("-")[0]
-        audio_file = os.path.join(self.chunks_folder, f"{beatmapset}_{chunk_id}.wav")
-
-        y, _ = librosa.load(audio_file, sr=SR)
-
-        mel_spectrogram = librosa.feature.melspectrogram(
-            y=y,
-            sr=SR,
-            n_fft=N_FFT,
-            hop_length=HOP_LENGTH,
-            n_mels=N_MELS,
+        beatmap_id = self.beatmaps[idx]
+        beatmapset_id = beatmap_id.split("-")[0]
+        chunk_audio, chunk_start, chunk_end = self.get_audio_chunk(beatmapset_id)
+        inputs = self.feature_extractor(
+            chunk_audio, sampling_rate=SR, return_tensors="pt"
         )
 
-        log_mel_spectrogram = librosa.power_to_db(mel_spectrogram, ref=np.max)
-        audio = log_mel_spectrogram.T
+        has_hit_data = self.get_chunk_data(beatmap_id, chunk_start, chunk_end)
+        print(inputs["input_values"].shape, has_hit_data.shape)
+        return inputs, has_hit_data
 
-        chunk_start = STEP_LENGTH_SEC * 1000 * chunk_id
-        chunk_end = chunk_start + (CHUNK_LENGTH_SEC * 1000)
+    def get_audio_chunk(self, beatmapset_id):
+        audio_path_mp3 = os.path.join(self.audio_folder, f"{beatmapset_id}.mp3")
+        audio_path_ogg = os.path.join(self.audio_folder, f"{beatmapset_id}.ogg")
+
+        audio_path = None
+        if os.path.exists(audio_path_mp3):
+            audio_path = audio_path_mp3
+        elif os.path.exists(audio_path_ogg):
+            audio_path = audio_path_ogg
+        else:
+            raise FileNotFoundError(f"No audio file for beatmapset_id: {beatmapset_id}")
+
+        total_duration_sec = librosa.get_duration(path=audio_path)
+
+        if total_duration_sec < CHUNK_LENGTH_SEC:
+            y, _ = librosa.load(audio_path, sr=SR)
+            chunk_audio = y
+            start_offset_sec = 0.0
+        else:
+            max_start_offset_sec = total_duration_sec - CHUNK_LENGTH_SEC
+
+            start_offset_sec = np.random.uniform(low=0.0, high=max_start_offset_sec)
+
+            chunk_audio, _ = librosa.load(
+                audio_path, sr=SR, offset=start_offset_sec, duration=CHUNK_LENGTH_SEC
+            )
+
+        chunk_start_ms = start_offset_sec * 1000
+        chunk_end_ms = chunk_start_ms + CHUNK_LENGTH_SEC * 1000
+
+        sf.write("/home/saliherdemk/ast_data/a.wav", chunk_audio, SR)
+
+        return chunk_audio, chunk_start_ms, chunk_end_ms
+
+    def get_chunk_data(self, beatmap_id, chunk_start, chunk_end):
         df = self.input_df
-        difficulty_rating = np.full(
-            audio.shape, df["difficulty_rating"].iloc[0], dtype=float
-        )
         df = df[
-            (df["id"] == beatmap)
+            (df["id"] == beatmap_id)
             & (df["time"] >= chunk_start)
             & (df["time"] <= chunk_end)
         ]
         df = df.copy()
 
-        frame_hop = HOP_LENGTH * 1000 / SR  # 20 ms
-        frame_starts = np.arange(chunk_start, chunk_end + frame_hop, frame_hop)
-        frame_ends = frame_starts + frame_hop
+        num_frames = 1024
+        frame_duration = (chunk_end - chunk_start) / num_frames
+
+        frame_starts = chunk_start + np.arange(num_frames) * frame_duration
+        frame_ends = frame_starts + frame_duration
+
+        has_hit = np.zeros(num_frames)
 
         fs = frame_starts[:, np.newaxis]
         fe = frame_ends[:, np.newaxis]
@@ -113,106 +126,26 @@ class BeatmapChunkDataset(Dataset):
                 0,
             )
 
-        # frame_df = pd.DataFrame(
-        #     {
-        #         "frame_start": frame_starts,
-        #         "frame_end": frame_ends,
-        #         "has_hit": has_hit,
-        #         "start_offset": start_offsets,
-        #         "end_offset": end_offsets,
-        #     }
-        # )
-        #
-        # frame_df.to_csv("/home/saliherdemk/try_dataset/frames.csv", index=False)
+        frame_df = pd.DataFrame(
+            {
+                "frame_start": frame_starts,
+                "frame_end": frame_ends,
+                "has_hit": has_hit,
+                "start_offset": start_offsets,
+                "end_offset": end_offsets,
+            }
+        )
 
-        audio_tensor = torch.tensor(audio, dtype=torch.float32)
-        diff_tensor = torch.tensor(difficulty_rating, dtype=torch.float32)
+        frame_df.to_csv("/home/saliherdemk/ast_data/frames.csv", index=False)
 
         has_hit = torch.tensor(has_hit, dtype=torch.float32)
-        start_offsets = torch.tensor(start_offsets, dtype=torch.float32)
-        end_offsets = torch.tensor(end_offsets, dtype=torch.float32)
 
-        return {
-            "beatmap": beatmap,
-            "chunk_id": chunk_id,
-            "audio": audio_tensor,
-            "has_hit": has_hit,
-            "start_offsets": start_offsets,
-            "end_offsets": end_offsets,
-            "difficulty_rating": diff_tensor,
-        }
-
-
-def collate_fn(batch):
-    max_chunks = max(len(item) for item in batch)
-
-    batch_audio = []
-    batch_has_hit = []
-    batch_start_offsets = []
-    batch_end_offsets = []
-    batch_diff = []
-
-    for item in batch:
-        n_chunks = len(item)
-
-        audio_shape = item[0]["audio"].shape
-        has_hit_shape = item[0]["has_hit"].shape
-        start_shape = item[0]["start_offsets"].shape
-        end_shape = item[0]["end_offsets"].shape
-        diff_shape = item[0]["difficulty_rating"].shape
-
-        pad_audio = torch.zeros(
-            (max_chunks - n_chunks, *audio_shape), dtype=torch.float32
-        )
-        pad_has_hit = torch.zeros(
-            (max_chunks - n_chunks, *has_hit_shape), dtype=torch.long
-        )
-        pad_start = torch.zeros(
-            (max_chunks - n_chunks, *start_shape), dtype=torch.float32
-        )
-        pad_end = torch.zeros((max_chunks - n_chunks, *end_shape), dtype=torch.float32)
-        pad_diff = torch.zeros(
-            (max_chunks - n_chunks, *diff_shape), dtype=torch.float32
-        )
-
-        audios = torch.stack([chunk["audio"] for chunk in item], dim=0)
-        has_hits = torch.stack([chunk["has_hit"] for chunk in item], dim=0)
-        start_offsets = torch.stack([chunk["start_offsets"] for chunk in item], dim=0)
-        end_offsets = torch.stack([chunk["end_offsets"] for chunk in item], dim=0)
-        diffs = torch.stack([chunk["difficulty_rating"] for chunk in item], dim=0)
-
-        audios = torch.cat([audios, pad_audio], dim=0)
-        has_hits = torch.cat([has_hits, pad_has_hit], dim=0)
-        start_offsets = torch.cat([start_offsets, pad_start], dim=0)
-        end_offsets = torch.cat([end_offsets, pad_end], dim=0)
-        diffs = torch.cat([diffs, pad_diff], dim=0)
-
-        batch_audio.append(audios)
-        batch_has_hit.append(has_hits)
-        batch_start_offsets.append(start_offsets)
-        batch_end_offsets.append(end_offsets)
-        batch_diff.append(diffs)
-
-    batch_audio = torch.stack(batch_audio, dim=0)
-    batch_has_hit = torch.stack(batch_has_hit, dim=0)
-    batch_start_offsets = torch.stack(batch_start_offsets, dim=0)
-    batch_end_offsets = torch.stack(batch_end_offsets, dim=0)
-    batch_diff = torch.stack(batch_diff, dim=0)
-
-    return {
-        "audio": batch_audio,
-        "difficulty_rating": batch_diff,
-        "has_hit": batch_has_hit,
-        "start_offsets": batch_start_offsets,
-        "end_offsets": batch_end_offsets,
-    }
+        return has_hit
 
 
 def createDataLoader(input_folder, batch_size):
     dataset = BeatmapChunkDataset(input_folder)
 
-    dataloader = DataLoader(
-        dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_fn
-    )
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
     return dataloader
