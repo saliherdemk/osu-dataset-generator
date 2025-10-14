@@ -31,8 +31,10 @@ class BeatmapChunkDataset(Dataset):
         beatmapset_id = beatmap_id.split("-")[0]
         chunk_audio, chunk_start, chunk_end = self.get_audio_chunk(beatmapset_id)
 
-        has_hit_data = self.get_chunk_data(beatmap_id, chunk_start, chunk_end)
-        return chunk_audio, has_hit_data
+        hit_obj_data, diff_rating = self.get_chunk_data(
+            beatmap_id, chunk_start, chunk_end
+        )
+        return chunk_audio, hit_obj_data, diff_rating
 
     def get_audio_chunk(self, beatmapset_id):
         audio_path_mp3 = os.path.join(self.audio_folder, f"{beatmapset_id}.mp3")
@@ -157,7 +159,7 @@ class BeatmapChunkDataset(Dataset):
 
         result = torch.tensor(result_df[cols].values, dtype=torch.float32)
 
-        return result
+        return result, df["difficulty_rating"].iloc[0]
 
 
 def createDataLoader(input_folder, batch_size):

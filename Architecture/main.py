@@ -112,8 +112,8 @@ def main():
     dataloader = createDataLoader(args.dataset_folder, int(args.batch_size))
 
     for data in dataloader:
-        chunk_audio, has_hit_data = data
-        print(chunk_audio.shape, has_hit_data.shape)
+        chunk_audio, hit_obj_data, diff_rating = data
+        print(chunk_audio.shape, hit_obj_data.shape, diff_rating.shape)
         break
 
     return
