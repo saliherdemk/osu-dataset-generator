@@ -111,6 +111,12 @@ def main():
 
     dataloader = createDataLoader(args.dataset_folder, int(args.batch_size))
 
+    for data in dataloader:
+        chunk_audio, has_hit_data = data
+        print(chunk_audio.shape, has_hit_data.shape)
+        break
+
+    return
     model = TimingModel()
     epoch = 0
 
