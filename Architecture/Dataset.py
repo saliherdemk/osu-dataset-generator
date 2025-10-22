@@ -16,7 +16,9 @@ class BeatmapChunkDataset(Dataset):
         self.audio_folder = os.path.join(input_folder, "audio")
         self.chunks = self.get_chunks(input_folder)
 
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.audio_cache = {}
+        self.cache_order = []
+        self.max_cache_size = 20
 
         self.mel_transform = torchaudio.transforms.MelSpectrogram(
             sample_rate=SR,
@@ -25,11 +27,20 @@ class BeatmapChunkDataset(Dataset):
             n_mels=N_MELS,
             center=False,
             power=2.0,
-        ).to(self.device)
+        )
 
         self.db_transform = torchaudio.transforms.AmplitudeToDB(
             stype="power", top_db=80
-        ).to(self.device)
+        )
+
+        self.resampler = None
+
+        self.grouped_data = {
+            beatmap_id: group for beatmap_id, group in self.input_df.groupby("id")
+        }
+        self.diff_ratings = dict(
+            zip(self.input_df["id"], self.input_df["difficulty_rating"])
+        )
 
     def __len__(self):
         return len(self.chunks)
@@ -45,12 +56,8 @@ class BeatmapChunkDataset(Dataset):
         )
 
         chunk_audio = chunk_audio.clone().detach().float().unsqueeze(0)
-        diff_rating = torch.tensor(
-            diff_rating, dtype=torch.float32, device=self.device
-        ).unsqueeze(0)
-        hit_obj_data = torch.tensor(
-            hit_obj_data, dtype=torch.float32, device=self.device
-        )
+        diff_rating = torch.tensor(diff_rating, dtype=torch.float32).unsqueeze(0)
+        hit_obj_data = torch.tensor(hit_obj_data, dtype=torch.float32)
 
         return chunk_audio, diff_rating, hit_obj_data
 
@@ -89,31 +96,49 @@ class BeatmapChunkDataset(Dataset):
                 end = min(start + CHUNK_LENGTH_SEC, total_duration)
                 chunks.append((beatmap_id, start, end))
 
-        # chunks_df = pd.DataFrame(chunks, columns=["id", "start", "end"])
-        # chunks_df.to_csv(chunks_file, index=False)
+        chunks_df = pd.DataFrame(chunks, columns=["id", "start", "end"])
+        chunks_df.to_csv(chunks_file, index=False)
         return chunks
 
-    def get_audio_chunk(self, beatmapset_id, chunk_start, chunk_end):
-        audio_path = self.find_audio(beatmapset_id)
+    def load_full_audio(self, beatmapset_id):
+        if beatmapset_id in self.audio_cache:
+            self.cache_order.remove(beatmapset_id)
+            self.cache_order.append(beatmapset_id)
+            return self.audio_cache[beatmapset_id]
 
+        audio_path = self.find_audio(beatmapset_id)
         wf, sr = torchaudio.load(audio_path)
-        wf = wf.to(self.device)
 
         if sr != SR:
-            resampler = torchaudio.transforms.Resample(sr, SR).to(self.device)
-            wf = resampler(wf)
-            sr = SR
+            if self.resampler is None or self.resampler.orig_freq != sr:
+                self.resampler = torchaudio.transforms.Resample(sr, SR)
+            wf = self.resampler(wf)
 
         wf = torch.mean(wf, dim=0, keepdim=True)
 
-        start_sample = int(chunk_start * sr)
-        end_sample = int(chunk_end * sr)
-        chunk_audio = wf[:, start_sample:end_sample]
+        if len(self.audio_cache) >= self.max_cache_size:
+            oldest = self.cache_order.pop(0)
+            del self.audio_cache[oldest]
 
-        expected_samples = int(sr * CHUNK_LENGTH_SEC)
+        self.audio_cache[beatmapset_id] = wf
+        self.cache_order.append(beatmapset_id)
+
+        return wf
+
+    def get_audio_chunk(self, beatmapset_id, chunk_start, chunk_end):
+        full_audio = self.load_full_audio(beatmapset_id)
+
+        start_sample = int(chunk_start * SR)
+        end_sample = int(chunk_end * SR)
+
+        chunk_audio = full_audio[:, start_sample:end_sample]
+
+        expected_samples = int(SR * CHUNK_LENGTH_SEC)
         if chunk_audio.shape[1] < expected_samples:
             pad_size = expected_samples - chunk_audio.shape[1]
             chunk_audio = F.pad(chunk_audio, (0, pad_size))
+
+        # torchaudio.save("/kaggle/working/output.wav", chunk_audio, SR)
 
         mel_spectrogram = self.mel_transform(chunk_audio)
         log_mel_spectrogram = self.db_transform(mel_spectrogram)
@@ -126,89 +151,91 @@ class BeatmapChunkDataset(Dataset):
         chunk_start = chunk_start_sec * 1000
         chunk_end = chunk_end_sec * 1000
 
-        df = self.input_df
-        df = df[df["id"] == beatmap_id]
-        diff_rating = df["difficulty_rating"].iloc[0]
-        df = df[(df["time"] >= chunk_start) & (df["time"] <= chunk_end)]
-        df = df.copy()
+        df = self.grouped_data[beatmap_id]
+        diff_rating = self.diff_ratings[beatmap_id]
+
+        mask = (df["time"] >= chunk_start) & (df["time"] <= chunk_end)
+        df_filtered = df[mask]
 
         num_frames = int(((CHUNK_LENGTH_SEC * SR) - N_FFT) / HOP_LENGTH) + 1
-        frame_duration = (chunk_end - chunk_start) / num_frames
 
+        if df_filtered.empty:
+            return np.zeros((num_frames, 7), dtype=np.float32), diff_rating
+
+        frame_duration = (chunk_end - chunk_start) / num_frames
         frame_starts = chunk_start + np.arange(num_frames) * frame_duration
         frame_ends = frame_starts + frame_duration
 
-        cols = [
-            "start",
-            "end",
-            "is_circle",
-            "is_slider_start",
-            "is_slider_end",
-            "is_spinner_start",
-            "is_spinner_end",
-            "start_offset",
-            "end_offset",
-        ]
+        result = np.zeros((num_frames, 9), dtype=np.float32)
 
-        result_df = pd.DataFrame(columns=cols)
+        df_filtered = df_filtered.copy()
+        df_filtered["end"] = df_filtered["time"] + df_filtered["duration"]
 
-        result_df["start"] = frame_starts
-        result_df["end"] = frame_ends
+        times = df_filtered["time"].values
+        ends = df_filtered["end"].values
+        types = df_filtered["type"].values
 
-        for col in cols[2:]:
-            result_df[col] = 0
+        for idx in range(num_frames):
+            start = frame_starts[idx]
+            end = frame_ends[idx]
 
-        df["end"] = df["time"] + df["duration"]
+            start_mask = (times >= start) & (times < end)
+            end_mask = (ends >= start) & (ends < end)
+            overlap_mask = (times < end) & (ends > start)
 
-        for i, row in result_df.iterrows():
-            start, end = row["start"], row["end"]
-
-            hit_start_in_frame = df[(df["time"] >= start) & (df["time"] < end)]
-            hit_end_in_frame = df[(df["end"] >= start) & (df["end"] < end)]
-
-            total_hits_in_frame = pd.concat(
-                [hit_start_in_frame, hit_end_in_frame]
-            ).drop_duplicates()
-            if len(total_hits_in_frame) > 1:
-                raise ValueError(
-                    f"Multiple hit objects found in frame {i}: {total_hits_in_frame}"
-                )
-
-            if not hit_start_in_frame.empty:
-                hit_type = hit_start_in_frame.iloc[0]["type"]
+            start_indices = np.where(start_mask)[0]
+            if len(start_indices) > 0:
+                hit_idx = start_indices[0]
+                hit_type = types[hit_idx]
 
                 if hit_type == "circle":
-                    result_df.at[i, "is_circle"] = 1
+                    result[idx, 0] = 1
                 elif hit_type == "slider":
-                    result_df.at[i, "is_slider_start"] = 1
+                    result[idx, 1] = 1
                 elif hit_type == "spinner":
-                    result_df.at[i, "is_spinner_start"] = 1
-                result_df.at[i, "start_offset"] = (
-                    hit_start_in_frame.iloc[0]["time"] - start
-                )
+                    result[idx, 4] = 1
+                result[idx, 7] = times[hit_idx] - start
 
-            if not hit_end_in_frame.empty:
-                hit_type = hit_end_in_frame.iloc[0]["type"]
+            end_indices = np.where(end_mask)[0]
+            if len(end_indices) > 0:
+                hit_idx = end_indices[0]
+                hit_type = types[hit_idx]
 
                 if hit_type == "slider":
-                    result_df.at[i, "is_slider_end"] = 1
-                    result_df.at[i, "end_offset"] = (
-                        hit_end_in_frame.iloc[0]["end"] - start
-                    )
-
+                    result[idx, 3] = 1
+                    result[idx, 8] = ends[hit_idx] - start
                 elif hit_type == "spinner":
-                    result_df.at[i, "is_spinner_end"] = 1
-                    result_df.at[i, "end_offset"] = (
-                        hit_end_in_frame.iloc[0]["end"] - start
-                    )
-        # result_df.to_csv("/kaggle/working/a.csv", index=False)
+                    result[idx, 6] = 1
+                    result[idx, 8] = ends[hit_idx] - start
 
-        return result_df[cols[2:]].values, diff_rating
+            overlap_indices = np.where(overlap_mask)[0]
+            for hit_idx in overlap_indices:
+                if types[hit_idx] == "slider":
+                    result[idx, 2] = 1
+                elif types[hit_idx] == "spinner":
+                    result[idx, 5] = 1
+
+        # df = pd.DataFrame(result)
+        # df["start"] = frame_starts
+        # df["end"] = frame_ends
+
+        # df.to_csv("/kaggle/working/a.csv", index=False)
+        # print(beatmap_id, diff_rating, result)
+
+        return result[:, :7], diff_rating
 
 
 def createDataLoader(input_folder, batch_size):
     dataset = BeatmapChunkDataset(input_folder)
 
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+    dataloader = DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=4,
+        pin_memory=True,
+        prefetch_factor=4,
+        persistent_workers=True,
+    )
 
     return dataloader

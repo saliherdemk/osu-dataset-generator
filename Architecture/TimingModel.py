@@ -38,7 +38,7 @@ class AudioEncoder(nn.Module):
 
         self.maxPooling = nn.MaxPool2d(kernel_size=(1, 2))
 
-        self.output_size = out_channels * 4 * N_MELS / 4
+        self.output_size = int(out_channels * 4 * N_MELS / 4)
 
     def forward(self, x):
         x = self.c1(x)
@@ -86,29 +86,32 @@ class TimingModel(nn.Module):
     def __init__(self, dr_embedding_size=64):
         super().__init__()
         self.encoder = AudioEncoder()
-        self.decoder = Decoder(int(self.encoder.output_size + dr_embedding_size))
+        self.decoder = Decoder(int(self.encoder.output_size))
         self.dropout = nn.Dropout(0.1)
 
         self.dr_embed = nn.Sequential(nn.Linear(1, dr_embedding_size), nn.ReLU())
 
-        self.classification_head = nn.Linear(self.decoder.output_size, 5)
-        self.regression_head = nn.Linear(self.decoder.output_size, 2)
+        self.gamma_head = nn.Linear(dr_embedding_size, self.encoder.output_size)
+        self.beta_head = nn.Linear(dr_embedding_size, self.encoder.output_size)
+
+        self.classification_head = nn.Linear(self.decoder.output_size, 7)
 
     def forward(self, x, diff_rating):
-        x = self.encoder(x)
 
         dr_x = self.dr_embed(diff_rating)
-        dr_x = dr_x.unsqueeze(1)
-        dr_x = dr_x.repeat(1, x.size(1), 1)
+        # dr_x = dr_x.unsqueeze(1)
+        # dr_x = dr_x.repeat(1, x.size(1), 1)
+        # x = torch.cat((x, dr_x), dim=2)
 
-        x = torch.cat((x, dr_x), dim=2)
+        gamma = self.gamma_head(dr_x).unsqueeze(1)
+        beta = self.beta_head(dr_x).unsqueeze(1)
+
+        audio_features = self.encoder(x)
+        x = (audio_features * gamma) + beta
 
         # x = self.dropout(x)
         x = self.decoder(x)
 
-        clf_out = self.classification_head(x)
-        reg_out = self.regression_head(x)
-
-        final_output = torch.cat((clf_out, reg_out), dim=2)
+        final_output = self.classification_head(x)
 
         return final_output

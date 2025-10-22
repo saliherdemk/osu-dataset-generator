@@ -2,8 +2,9 @@ import argparse
 import os
 
 import torch
-import torch.nn as nn
+from kornia.losses import binary_focal_loss_with_logits
 from TimingModel import TimingModel
+from tqdm import tqdm
 
 from Architecture.Dataset import createDataLoader
 
@@ -12,18 +13,17 @@ def train(dataloader, model, save_to, load_from, num_epochs, lr):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
 
-    pos_weight = torch.tensor([9.0], device=device)
-    criterion_bce = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    kwargs = {"alpha": 0.25, "gamma": 2.0, "reduction": "mean"}
 
     start_epoch = 0
     if load_from:
-        checkpoint = torch.load(load_from)
+        checkpoint = torch.load(load_from, map_location=torch.device("cpu"))
         start_epoch = checkpoint["epoch"] + 1
         model.load_state_dict(checkpoint["model_state"])
         optimizer.load_state_dict(checkpoint["optim_state"])
 
-    for epoch in range(start_epoch, num_epochs):
+    for epoch in tqdm(range(start_epoch, num_epochs)):
         model.train()
         epoch_loss = 0.0
 
@@ -38,20 +38,24 @@ def train(dataloader, model, save_to, load_from, num_epochs, lr):
 
             res = model(chunk_audio, diff_rating)
 
-            has_hit_pred = res[:, :, :5]
-            has_hit_gt = hit_obj_data[:, :, :5]
+            has_hit_pred = res
+            has_hit_gt = hit_obj_data
 
-            loss = criterion_bce(has_hit_pred.reshape(-1), has_hit_gt.reshape(-1))
+            loss = binary_focal_loss_with_logits(
+                has_hit_pred.reshape(-1, has_hit_pred.shape[2]),
+                has_hit_gt.reshape(-1, has_hit_gt.shape[2]),
+                **kwargs,
+            )
 
             loss.backward()
             optimizer.step()
 
             epoch_loss += loss.item()
-            print(epoch_loss)
+            # print(epoch_loss)
 
         avg_loss = epoch_loss / len(dataloader)
         print(f"Epoch {epoch+1}/{num_epochs} | Avg Loss: {avg_loss:.6f}")
-        if epoch % 5 == 0:
+        if save_to and epoch % 1 == 0:
             torch.save(
                 {
                     "epoch": epoch,
@@ -66,7 +70,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset_folder", required=True)
     parser.add_argument("--batch_size", default=4)
-    parser.add_argument("--num_epochs", default=10)
+    parser.add_argument("--num_epochs", default=10, type=int)
     parser.add_argument("--load_from", default=None)
     parser.add_argument("--save_to", default=None)
     parser.add_argument("--mode", default="train")
@@ -77,7 +81,7 @@ def main():
 
     model = TimingModel()
 
-    train(dataloader, model, args.save_to, None, args.num_epochs, args.lr)
+    train(dataloader, model, args.save_to, args.load_from, args.num_epochs, args.lr)
 
 
 if __name__ == "__main__":
