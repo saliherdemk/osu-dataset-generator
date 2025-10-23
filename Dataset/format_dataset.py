@@ -78,7 +78,6 @@ class Formatter:
         mapper_ids = selected_info["mapper_id"].values
 
         results = []
-        will_removed = []
         first_tps = {}
         for b_id, t_time, base_vel, diff, mapper in zip(
             beatmap_ids, target_times, base_velocities, difficulty_ratings, mapper_ids
@@ -93,10 +92,6 @@ class Formatter:
                 if not uninherited_candidates.empty
                 else tp_group.iloc[0]
             )
-
-            if uninherited_candidates.empty:
-                will_removed.append(b_id)
-                print(f"Skipping beatmap {b_id}")
 
             inherited_candidates = relevant_tp[relevant_tp["uninherited"] == 0.0]
             if not inherited_candidates.empty:
@@ -127,16 +122,14 @@ class Formatter:
                     "mapper_id": mapper,
                 }
             )
-        return pd.DataFrame(results), will_removed, first_tps
+        return pd.DataFrame(results), first_tps
 
     def process_group(self, beatmap_data):
         timing_data = []
-        all_removed = []
         all_first_tps = {}
 
         for _, group in beatmap_data.groupby("id"):
-            res_df, will_removed, first_tps = self.extract_timing_attributes(group)
-            all_removed += will_removed
+            res_df, first_tps = self.extract_timing_attributes(group)
             all_first_tps.update(first_tps)
             timing_data.append(res_df)
         timing_df = pd.concat(timing_data, ignore_index=True)
@@ -160,28 +153,8 @@ class Formatter:
             - beatmap_data.loc[mask_spinner, "time"]
         ).astype(int)
 
-        def compute_delta(group):
-            first_tp = all_first_tps[group.name]
-            return group.diff().fillna(group - first_tp).astype(int)
-
-        def compute_tick(row):
-            tick = 0
-
-            if row["type"] == "slider":
-
-                slider_units = row["length"] / (row["slider_velocity"] * 100)
-                tick = int(round(slider_units * row["meter"])) * row["repeat"]
-
-            elif row["type"] == "spinner":
-                spinner_duration = row["spinner_time"] - row["time"]
-                beats = spinner_duration / row["beat_length"]
-                tick = int(round(beats * row["meter"]))
-
-            return tick
-
         beatmap_data.drop(columns="length", inplace=True)
         beatmap_data = beatmap_data[COL_TYPES.keys()].astype(COL_TYPES)
-        beatmap_data = beatmap_data[~beatmap_data["id"].isin(all_removed)]
 
         return beatmap_data
 
