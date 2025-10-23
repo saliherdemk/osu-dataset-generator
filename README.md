@@ -1,41 +1,6 @@
 # osu! Beatmap Processing and AI Generator
 
-More features extracted, a more comprehensive version of the process lives on the master branch. Deprecated in favor of the seq2seq model for tokenization.
-
-
-This repository processes beatmaps from the rhythm game called [osu!](https://osu.ppy.sh/). It analyzes, processes, reformats, and normalizes both audio and hit objects. The final dataset will serve as training data for an osu! AI beatmap generator.  
-
-The goal is to create an AI that can generate proper beatmaps from just an MP3 file, supporting a variety of difficulty levels. Right now, I'm considering a seq2seq model with an encoder-decoder Transformer for hit object time prediction since the task is essentially a machine translation problem. After that I’ll consider creating separate models for constructing beatmap styles. The main goal is to have a base model that can be fine-tunable with a specialized dataset to generate more specific style beatmaps.
-
-- Inputs: Mel spectrogram extracted from the MP3 file + difficulty rating (indicating how difficult the beatmap should be).  
-- Outputs: A sequence of hit objects that together form the beatmap.  
-
-Predicting hit object timing is one of the hardest parts of the problem. For the same mel spectrogram, hit object times can vary depending on the difficulty rating.  
-
-I plan to use a seq2seq Transformer where the encoder processes the mel spectrogram and difficulty rating, and the decoder generates the hit objects.  
-
-Example sequence format:  
-
-```
-<beatmap_start>,<hit_object_start>,type_slider,<start_delta_time>,dt_0,<end_delta_time>,<start_repeat>,repeat_1,<end_repeat>,sv_1.2,<start_duration>,duration_379,<end_duration>,<hit_object_end>,<hit_object_start>,type_slider,<start_delta_time>,dt_759,<end_delta_time>,<start_repeat>,repeat_1,<end_repeat>,sv_1.2,<start_duration>,duration_379,<end_duration>,<hit_object_end>,<hit_object_start>,type_slider,<start_delta_time>,dt_759,<end_delta_time>,<start_repeat>,repeat_1,<end_repeat>,sv_1.2,<start_duration>,duration_379,<end_duration>,<hit_object_end>,<hit_object_start>,type_slider,<start_delta_time>,dt_760,<end_delta_time>,<start_repeat>,repeat_1,<end_repeat>,sv_1.2,<start_duration>,duration_379,<end_duration>,<hit_object_end>,<hit_object_start>,type_slider,<start_delta_time>,dt_759,<end_delta_time>,<start_repeat>,repeat_1,<end_repeat>,sv_1.2,<start_duration>,duration_379,<end_duration>,<hit_object_end>
-```
-
-Here, `delta_time` indicates the difference between the last hit object time and the current hit object time. Representing timing relatively hopefully will help the model make better predictions.  
-
-BPM can change in the middle of a beatmap, so I think predicting BPM directly is unnecessary. We can just figure it out from the hit object times, but the hard part will be reducing noise and snapping objects to the right beats.  
-
-
-Another problem is tokenization. Since `delta_time` can be anywhere from 0 to infinity, I split it into smaller chunks.  
-
-Example:  
-
-4500 → `<start_delta_time>,dt_2000,dt_2000,dt_500<end_delta_time>`
-
-This way large time gaps can be broken down into smaller more manageable tokens.  
-
-I'm still not sure which attributes should be tokenized as discrete tokens and which should remain continuous. See [`Tokenizer/encode.py`](Tokenizer/encode.py). Feel free to reach me out if you have any suggestions.
-
-# Environment Setup
+## Environment Setup
 This project uses the Python version specified in the `.python-version` file. You can use [pyenv](https://github.com/pyenv/pyenv) to automatically switch to the correct version.
 
 Create virtual environment
@@ -51,7 +16,7 @@ Install packages
 pip install -r requirements.txt
 ```
 
-# Dataset Pipeline
+## Dataset Pipeline
 
 Download your current beatmapset using [this](https://github.com/saliherdemk/osu-lazer-backup) tool. This will give you `.osz` files for your beatmapsets. 
 
@@ -99,7 +64,7 @@ Some of the audio files might be corrupted or not ready for processing. Fix thos
 python Dataset/pipeline/fix_corrupted_audio.py --dataset_folder=/your_path/dataset
 ```
 
-# Run Pipeline
+### Run Pipeline
 You can run everything at once using the `run_pipeline.sh` script.
 
 ```
@@ -111,7 +76,7 @@ chmod +x /Dataset/run_pipeline.sh
 ```
 
 
-# Formatting
+### Formatting
 
 Now the hard part. Matching hit objects with timing points. 
 
@@ -139,27 +104,22 @@ You can read what these attributes represent on the [osu wiki!](https://osu.ppy.
 
 We need to get the current timing attributes for each hit object. To do this, we must find the latest timing point before the hit object and extract attributes from there. For uninherited timing points, `beat_length` represents `ms_per_beat`, whereas for inherited ones, it represents the `slider multiplier`. More than one timing point may affect the same hit object, so we need to create columns for each possible timing point.
 
-For each row, we need `beat_length`, `meter`, `slider_velocity`, `sample_set`, `volume`, `effects`
-values. Also we need the corresponding `MFCC` and `RMS` values for that time which we will extract from the audio file.
 
-Additionally, I calculated `slider_time` which mean how many milliseconds it takes to complete one slide of the slider. [sliders](https://osu.ppy.sh/wiki/en/Client/File_formats/osu_%28file_format%29#sliders)
+Additionally, I calculated `duration` which mean how many milliseconds it takes to complete one slide of the slider or  how many ms to complete the spinner. [sliders](https://osu.ppy.sh/wiki/en/Client/File_formats/osu_%28file_format%29#sliders)
 
 
 ```
 python Dataset/format_dataset.py --dataset_path=/your_path/dataset
 ```
 
-Now you should have `formatted` folder which contains `formatted.csv` file and `mels` folder. 
+Now you should have `formatted.csv` file which should look like this:
 
-`formatted.csv` should look like this:
 
-|id       |time|type   |x  |y  |hit_sound|path             |repeat|spinner_time|new_combo|slider_velocity|sample_set|volume|effects|difficulty_rating|meter|beat_length    |mapper_id|beatmap_id|tick|delta_time|
-|---------|----|-------|---|---|---------|-----------------|------|------------|---------|---------------|----------|------|-------|-----------------|-----|---------------|---------|----------|----|----------|
-|2182049-0|2644|spinner|256|192|0        |E&#124;               |0     |4846        |True     |2.4            |2         |30    |0      |3.08             |4    |550.45871559633|8147142  |2182049   |16  |0         |
-|2182049-0|5398|slider |339|153|0        |P&#124;365:129&#124;468:175|1     |0           |True     |1.44           |2         |30    |0      |3.08             |4    |550.45871559633|8147142  |2182049   |4   |2754      |
-|2182049-0|6223|slider |395|213|0  |P&#124;368:236&#124;265:190|1  |0   |False|1.44|2  |30 |0  |3.08|4  |550.45871559633|8147142|2182049|4  |825 |
-|2182049-0|7324|circle |168|71 |0  |E&#124;               |0  |0   |True |1.44|2  |30 |0  |3.08|4  |550.45871559633|8147142|2182049|0  |1101|
-
+|id     |time|type  |x  |y  |hit_sound|path                   |repeat|spinner_time|new_combo|slider_velocity|sample_set|volume|effects|difficulty_rating|meter|beat_length     |mapper_id|beatmap_id|duration|
+|-------|----|------|---|---|---------|-----------------------|------|------------|---------|---------------|----------|------|-------|-----------------|-----|----------------|---------|----------|--------|
+|18779-0|3221|circle|400|88 |0        |E&#124;                     |0     |0           |False    |1.4            |1         |76    |0      |2.88             |4    |368.098159509202|73453    |18779     |0       |
+|18779-0|3405|slider|400|88 |0        |B&#124;320:56&#124;248:80&#124;208:168|1     |0           |False    |1.4            |1         |76    |0      |2.88             |4    |368.098159509202|73453    |18779     |552     |
+|18779-0|4141|circle|219|146|4        |E&#124;                     |0     |0           |True     |1.4            |1         |76    |0      |2.88             |4    |368.098159509202|73453    |18779     |0       |
 
 | Field             | Type     |
 |-------------------|----------|
@@ -182,20 +142,43 @@ Now you should have `formatted` folder which contains `formatted.csv` file and `
 | beat_length       | float64  |
 | mapper_id         | int64    |
 | beatmap_id        | int64    |
-| tick              | int64    |
-| delta_time        | int64    |
+| duration        | int64    |
 
-`delta_time` is the difference between the hit object’s time and the previous hit object’s time. `tick` represents how many ticks it takes to complete the slider or spinner. The others are self-explanatory.
+# Timing Model
 
-# Tokenizing
+I used CRNN to predict hit object times and types based on audio file and provided difficulty rating.
 
-You can find the vocabulary in the `Tokenizer/vocab/` folder. Most of the tokenization is straightforward. I applied some normalization while tokenizing.
+## Model Architecture
+TODO
 
-* `x` and `y` values are snapped to the 32 px grid.
-* `volume` column is snapped to a multiple of 10.
-* `delta_time` has a range from 0 to 2000. Larger delta_time values are represented as a combination of these values. (Example: 4500 → 2000, 2000, 500)
-* `slider_velocity` has a precision of 0.1.
-* `tick` has a range from 0 to 50. Larger values are represented as a combination of these tokens.
-* `repeat` has a range from 0 to 30. Larger values are represented as a combination of these tokens. (didn't like that. repeat should be single token. UPDATE: I hoper there will be practiacal limition of being ranked but appreantly there is not. Beatmap `1862270` has 96 repeat in one slider and it's ranked. Also in fine tuning people might one to create tech-based map so repeat will be stay as it is.)
+## Training
+
+You need `audio` folder which contains audio files and `formatted.csv` file for that. Assuming both locating in the parent folder `dataset`, you can train model on that dataset with
+
+``` 
+python Architecture/main.py --mode=train --dataset_folder=/your_path/dataset --save_to=/your_checkpoint_path --load_from=/your_last_checkpoint_file.pt 
+```
+
+`main.py` arguments:
+
+```
+parser.add_argument("--dataset_folder", default=None)
+parser.add_argument("--batch_size", default=4, type=int)
+parser.add_argument("--num_epochs", default=10, type=int)
+parser.add_argument("--load_from", default=None)
+parser.add_argument("--save_to", default=None)
+parser.add_argument("--mode", default="train", choices=["train", "predict"])
+parser.add_argument("--lr", default=1e-4, type=float)
+parser.add_argument("--audio_path", default=None)
+parser.add_argument("--diff_rating", default=None, type=float)
+```
+
+## Prediction
+
+```
+python Architecture/main.py --mode=predict --load_from=/your_last_checkpoint_file.pt --audio_path=/home/saliherdemk/try_dataset/audio/18779.mp3 --diff_rating=2.88 --save_to=/home/saliherdemk/try_dataset/checkpoint/
+```
+
+
 
 
