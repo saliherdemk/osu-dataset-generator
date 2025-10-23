@@ -47,7 +47,7 @@ def train(dataloader, model, optimizer, save_to, num_epochs, start_epoch, device
 
         avg_loss = epoch_loss / len(dataloader)
         print(f"Epoch {epoch}/{num_epochs} | Avg Loss: {avg_loss:.6f}")
-        if save_to and epoch % 1 == 0:
+        if save_to and epoch % 500 == 0:
             torch.save(
                 {
                     "epoch": epoch,

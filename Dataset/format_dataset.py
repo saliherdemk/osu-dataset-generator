@@ -25,9 +25,6 @@ COL_TYPES = {
     "mapper_id": "int64",
     "beatmap_id": "int64",
     "duration": "int64",
-    "delta_time": "int64",
-    "duration_tick": "int64",
-    "delta_time_tick": "int64",
 }
 
 
@@ -167,12 +164,6 @@ class Formatter:
             first_tp = all_first_tps[group.name]
             return group.diff().fillna(group - first_tp).astype(int)
 
-        beatmap_data["delta_time"] = (
-            beatmap_data.groupby("id")["time"]
-            .apply(compute_delta)
-            .reset_index(level=0, drop=True)
-        )
-
         def compute_tick(row):
             tick = 0
 
@@ -187,15 +178,6 @@ class Formatter:
                 tick = int(round(beats * row["meter"]))
 
             return tick
-
-        def compute_delta_time_tick(row):
-            beats = row["delta_time"] / row["beat_length"]
-            return int(round(beats * row["meter"]))
-
-        beatmap_data["duration_tick"] = beatmap_data.apply(compute_tick, axis=1)
-        beatmap_data["delta_time_tick"] = beatmap_data.apply(
-            compute_delta_time_tick, axis=1
-        )
 
         beatmap_data.drop(columns="length", inplace=True)
         beatmap_data = beatmap_data[COL_TYPES.keys()].astype(COL_TYPES)
