@@ -115,3 +115,14 @@ class TimingModel(nn.Module):
         final_output = self.classification_head(x)
 
         return final_output
+
+    def predict(self, chunks, diff_rating):
+        diff_rating = torch.tensor([diff_rating], dtype=torch.float32)
+        diff_rating = torch.full(
+            (chunks.shape[0], 1), diff_rating.item(), dtype=torch.float32
+        )
+        with torch.no_grad():
+            output = self.forward(chunks, diff_rating)
+            probs = torch.sigmoid(output)
+
+        return probs
