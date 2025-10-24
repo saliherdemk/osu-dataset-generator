@@ -78,12 +78,10 @@ class Formatter:
         mapper_ids = selected_info["mapper_id"].values
 
         results = []
-        first_tps = {}
         for b_id, t_time, base_vel, diff, mapper in zip(
             beatmap_ids, target_times, base_velocities, difficulty_ratings, mapper_ids
         ):
             tp_group = self.timing_by_id[b_id]
-            first_tps[b_id] = tp_group[tp_group["time"] > 0].iloc[0]["time"]
             relevant_tp = tp_group[tp_group["time"] <= t_time]
 
             uninherited_candidates = relevant_tp[relevant_tp["uninherited"] == 1.0]
@@ -122,15 +120,13 @@ class Formatter:
                     "mapper_id": mapper,
                 }
             )
-        return pd.DataFrame(results), first_tps
+        return pd.DataFrame(results)
 
     def process_group(self, beatmap_data):
         timing_data = []
-        all_first_tps = {}
 
         for _, group in beatmap_data.groupby("id"):
-            res_df, first_tps = self.extract_timing_attributes(group)
-            all_first_tps.update(first_tps)
+            res_df = self.extract_timing_attributes(group)
             timing_data.append(res_df)
         timing_df = pd.concat(timing_data, ignore_index=True)
 
