@@ -18,7 +18,7 @@ class BeatmapChunkDataset(Dataset):
 
         self.audio_cache = {}
         self.cache_order = []
-        self.max_cache_size = 20
+        self.max_cache_size = 100000
 
         self.mel_transform = torchaudio.transforms.MelSpectrogram(
             sample_rate=SR,
@@ -62,12 +62,17 @@ class BeatmapChunkDataset(Dataset):
         return chunk_audio, diff_rating, hit_obj_data
 
     def find_audio(self, beatmapset_id):
-        mp3 = os.path.join(self.audio_folder, f"{beatmapset_id}.mp3")
-        ogg = os.path.join(self.audio_folder, f"{beatmapset_id}.ogg")
-        if os.path.exists(mp3):
-            return mp3
-        if os.path.exists(ogg):
-            return ogg
+        # I hate everyone who has extention that is not .mp3 or .ogg.
+        # Special hate for https://osu.ppy.sh/beatmapsets/1855918#osu/3814170 who named audio extension as .727.
+        extensions = ["", ".Mp3", ".ogg", ".MP3", ".OGG", ".mp3", ".727"]
+        paths = [
+            os.path.join(self.audio_folder, str(beatmapset_id) + e) for e in extensions
+        ]
+
+        for p in paths:
+            if os.path.exists(p):
+                return p
+
         raise FileNotFoundError
 
     def get_chunks(self, input_folder):
