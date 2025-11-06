@@ -11,8 +11,22 @@ from config import CHUNK_LENGTH_SEC, HOP_LENGTH, N_FFT, N_MELS, SR, STEP_LENGTH_
 
 
 class BeatmapChunkDataset(Dataset):
-    def __init__(self, input_folder):
-        self.input_df = pd.read_csv(os.path.join(input_folder, "formatted.csv"))
+    def __init__(self, input_folder, t="train"):
+        self.type = "train" if t == "train" else "eval"
+
+        dtypes = {
+            "id": "string",
+            "time": "float64",
+            "type": "string",
+            "difficulty_rating": "float16",
+            "duration": "int64",
+        }
+
+        self.input_df = pd.read_csv(
+            os.path.join(input_folder, "formatted.csv"),
+            dtype=dtypes,
+            usecols=dtypes.keys(),
+        )
         self.audio_folder = os.path.join(input_folder, "audio")
         self.chunks = self.get_chunks(input_folder)
 
@@ -76,7 +90,7 @@ class BeatmapChunkDataset(Dataset):
         raise FileNotFoundError
 
     def get_chunks(self, input_folder):
-        chunks_file = os.path.join(input_folder, "chunks.csv")
+        chunks_file = os.path.join(input_folder, f"{self.type}_chunks.csv")
         if os.path.exists(chunks_file):
             print("Loading cached chunk metadata...")
             df = pd.read_csv(chunks_file)
@@ -90,7 +104,7 @@ class BeatmapChunkDataset(Dataset):
             beatmapset_id = beatmap_id.split("-")[0]
             audio_path = self.find_audio(beatmapset_id)
 
-            info = torchaudio.info(audio_path)
+            info = torchaudio.info(audio_path, backend="soundfile")
             total_samples = info.num_frames
             sr = info.sample_rate
             total_duration = total_samples / sr
@@ -112,7 +126,7 @@ class BeatmapChunkDataset(Dataset):
             return self.audio_cache[beatmapset_id]
 
         audio_path = self.find_audio(beatmapset_id)
-        wf, sr = torchaudio.load(audio_path)
+        wf, sr = torchaudio.load(audio_path, backend="soundfile")
 
         if sr != SR:
             if self.resampler is None or self.resampler.orig_freq != sr:
@@ -230,8 +244,8 @@ class BeatmapChunkDataset(Dataset):
         return result[:, :7], diff_rating
 
 
-def createDataLoader(input_folder, batch_size):
-    dataset = BeatmapChunkDataset(input_folder)
+def createDataLoader(input_folder, batch_size, t):
+    dataset = BeatmapChunkDataset(input_folder, t)
 
     dataloader = DataLoader(
         dataset,
