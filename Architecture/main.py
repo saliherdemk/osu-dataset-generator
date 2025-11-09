@@ -178,9 +178,9 @@ def main():
             )
         bs = int(args.batch_size)
 
-        train_dataloader = createDataLoader(args.train_dataset_folder, bs, t="train")
+        train_dataloader = createDataLoader(args.train_dataset_folder, bs)
         eval_dataloader = (
-            createDataLoader(args.eval_dataset_folder, bs, t="eval")
+            createDataLoader(args.eval_dataset_folder, bs)
             if args.eval_dataset_folder
             else None
         )

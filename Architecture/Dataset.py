@@ -11,9 +11,7 @@ from config import CHUNK_LENGTH_SEC, HOP_LENGTH, N_FFT, N_MELS, SR, STEP_LENGTH_
 
 
 class BeatmapChunkDataset(Dataset):
-    def __init__(self, input_folder, t="train"):
-        self.type = "train" if t == "train" else "eval"
-
+    def __init__(self, input_folder):
         dtypes = {
             "id": "string",
             "time": "float64",
@@ -90,7 +88,7 @@ class BeatmapChunkDataset(Dataset):
         raise FileNotFoundError
 
     def get_chunks(self, input_folder):
-        chunks_file = os.path.join(input_folder, f"{self.type}_chunks.csv")
+        chunks_file = os.path.join(input_folder, "chunks.csv")
         if os.path.exists(chunks_file):
             print("Loading cached chunk metadata...")
             df = pd.read_csv(chunks_file)
@@ -104,7 +102,7 @@ class BeatmapChunkDataset(Dataset):
             beatmapset_id = beatmap_id.split("-")[0]
             audio_path = self.find_audio(beatmapset_id)
 
-            info = torchaudio.info(audio_path, backend="soundfile")
+            info = torchaudio.info(audio_path)
             total_samples = info.num_frames
             sr = info.sample_rate
             total_duration = total_samples / sr
@@ -126,7 +124,7 @@ class BeatmapChunkDataset(Dataset):
             return self.audio_cache[beatmapset_id]
 
         audio_path = self.find_audio(beatmapset_id)
-        wf, sr = torchaudio.load(audio_path, backend="soundfile")
+        wf, sr = torchaudio.load(audio_path)
 
         if sr != SR:
             if self.resampler is None or self.resampler.orig_freq != sr:
@@ -244,8 +242,8 @@ class BeatmapChunkDataset(Dataset):
         return result[:, :7], diff_rating
 
 
-def createDataLoader(input_folder, batch_size, t):
-    dataset = BeatmapChunkDataset(input_folder, t)
+def createDataLoader(input_folder, batch_size):
+    dataset = BeatmapChunkDataset(input_folder)
 
     dataloader = DataLoader(
         dataset,
