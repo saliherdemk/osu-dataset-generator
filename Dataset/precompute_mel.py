@@ -1,12 +1,19 @@
 import argparse
 import os
 import sys
+import warnings
 
 import numpy as np
 import pandas as pd
 import torch
 import torch.nn.functional as F
 import torchaudio
+from tqdm import tqdm
+
+warnings.filterwarnings("ignore", category=UserWarning)
+
+import torchaudio
+from tqdm import tqdm
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
@@ -202,7 +209,7 @@ class ComputeMelClass:
         return result[:, :7], diff_rating
 
     def save_mel(self, output_folder):
-        for b_data in self.chunks:
+        for b_data in tqdm(self.chunks):
             beatmap_id, chunk_start_sec, chunk_end_sec = b_data
             beatmapset_id = beatmap_id.split("-")[0]
             chunk_audio = self.get_audio_chunk(
@@ -236,7 +243,7 @@ def main():
     args = parser.parse_args()
 
     mel_class = ComputeMelClass(args.dataset_path)
-    mel_class.save_mel("/home/saliherdemk/try_dataset/precomputed/")
+    mel_class.save_mel(os.path.join(args.dataset_path, "precomputed"))
 
 
 if __name__ == "__main__":
