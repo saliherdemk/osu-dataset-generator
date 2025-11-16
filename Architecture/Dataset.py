@@ -5,7 +5,6 @@ import pandas as pd
 import torch
 import torch.nn.functional as F
 import torchaudio
-from pandas.io.common import file_path_to_url
 from torch.utils.data import DataLoader, Dataset
 
 from config import CHUNK_LENGTH_SEC, HOP_LENGTH, N_FFT, N_MELS, SR, STEP_LENGTH_SEC
@@ -28,7 +27,7 @@ class BeatmapChunkDataset(Dataset):
             hit_obj_data = torch.from_numpy(data["labels"]).float()
             diff_rating = torch.from_numpy(data["difficulty"]).float()
 
-        return chunk_audio, hit_obj_data, diff_rating
+        return chunk_audio, diff_rating, hit_obj_data
 
 
 def createDataLoader(input_folder, batch_size):

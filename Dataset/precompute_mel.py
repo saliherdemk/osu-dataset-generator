@@ -2,6 +2,7 @@ import argparse
 import os
 import sys
 import warnings
+from collections import defaultdict
 
 import numpy as np
 import pandas as pd
@@ -13,7 +14,6 @@ from tqdm import tqdm
 warnings.filterwarnings("ignore", category=UserWarning)
 
 import torchaudio
-from tqdm import tqdm
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
@@ -118,9 +118,7 @@ class ComputeMelClass:
 
         return wf
 
-    def get_audio_chunk(self, beatmapset_id, chunk_start, chunk_end):
-        full_audio = self.load_full_audio(beatmapset_id)
-
+    def get_audio_chunk(self, full_audio, chunk_start, chunk_end):
         start_sample = int(chunk_start * SR)
         end_sample = int(chunk_end * SR)
 
@@ -209,30 +207,36 @@ class ComputeMelClass:
         return result[:, :7], diff_rating
 
     def save_mel(self, output_folder):
-        for b_data in tqdm(self.chunks):
+
+        chunks_by_set = defaultdict(list)
+        for b_data in self.chunks:
             beatmap_id, chunk_start_sec, chunk_end_sec = b_data
             beatmapset_id = beatmap_id.split("-")[0]
-            chunk_audio = self.get_audio_chunk(
-                beatmapset_id, chunk_start_sec, chunk_end_sec
-            )
-            hit_obj_data, diff_rating = self.get_chunk_data(
-                beatmap_id, chunk_start_sec, chunk_end_sec
-            )
+            chunks_by_set[beatmapset_id].append(b_data)
 
-            chunk_audio = chunk_audio.clone().detach().float().unsqueeze(0)
-            diff_rating = torch.tensor(diff_rating, dtype=torch.float16).unsqueeze(0)
-            hit_obj_data = torch.tensor(hit_obj_data, dtype=torch.float16)
+        for beatmapset_id, chunk_list in tqdm(chunks_by_set.items()):
+            full_audio = self.load_full_audio(beatmapset_id)
 
-            chunk_path = os.path.join(
-                output_folder, f"{beatmap_id}_{chunk_start_sec}_{chunk_end_sec}.npz"
-            )
+            for b_data in chunk_list:
+                beatmap_id, chunk_start_sec, chunk_end_sec = b_data
 
-            np.savez_compressed(
-                chunk_path,
-                spectrogram=chunk_audio.numpy().astype(np.float16),
-                labels=hit_obj_data.numpy().astype(np.float16),
-                difficulty=diff_rating.numpy().astype(np.float16),
-            )
+                chunk_audio = self.get_audio_chunk(
+                    full_audio, chunk_start_sec, chunk_end_sec
+                )
+                hit_obj_data, diff_rating = self.get_chunk_data(
+                    beatmap_id, chunk_start_sec, chunk_end_sec
+                )
+
+                chunk_path = os.path.join(
+                    output_folder, f"{beatmap_id}_{chunk_start_sec}_{chunk_end_sec}.npz"
+                )
+
+                np.savez_compressed(
+                    chunk_path,
+                    spectrogram=chunk_audio.numpy().astype(np.float16),
+                    labels=hit_obj_data.astype(np.float16),
+                    difficulty=np.array([diff_rating], dtype=np.float16),
+                )
 
 
 def main():
@@ -243,7 +247,9 @@ def main():
     args = parser.parse_args()
 
     mel_class = ComputeMelClass(args.dataset_path)
-    mel_class.save_mel(os.path.join(args.dataset_path, "precomputed"))
+    precomputed_folder = os.path.join(args.dataset_path, "precomputed")
+    os.makedirs(precomputed_folder, exist_ok=True)
+    mel_class.save_mel(precomputed_folder)
 
 
 if __name__ == "__main__":
