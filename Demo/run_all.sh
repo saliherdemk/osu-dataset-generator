@@ -1,20 +1,20 @@
 #!/bin/bash
 set -euo pipefail
 
-for id in $(seq 0 7); do
+for id in $(seq 0 4 32); do
     echo "=============================="
     echo " Running pipeline for ID ${id}..."
     echo "=============================="
 
-    # python Dataset/merge_dataset.py \
-    #     --folder_one=/home/saliherdemk/osu-dataset/${id}/formatted/ \
-    #     --folder_two=/home/saliherdemk/osu-dataset/${id+1}/formatted \
-    #     --output_folder=/home/saliherdemk/merged${id}
+    python Dataset/merge_formatted_files.py \
+        --folder_one=/run/media/saliherdemk/HIKVISION/merged/${id}/ \
+        --folder_two=/run/media/saliherdemk/HIKVISION/merged/${id+2}/ \
+        --output_folder=/home/saliherdemk/merged2/${id}
     
-    python Tokenizer/encode.py \
-        --input_file=/home/saliherdemk/osu-dataset/${id}/formatted/formatted.csv \
-        --output_file=/home/saliherdemk/osu-dataset/${id}/formatted/encoded.csv \
-        --mel_folder=/home/saliherdemk/osu-dataset/${id}/formatted/mels
+    # python Tokenizer/encode.py \
+    #     --input_file=/home/saliherdemk/osu-dataset/${id}/formatted/formatted.csv \
+    #     --output_file=/home/saliherdemk/osu-dataset/${id}/formatted/encoded.csv \
+    #     --mel_folder=/home/saliherdemk/osu-dataset/${id}/formatted/mels
 
 
 

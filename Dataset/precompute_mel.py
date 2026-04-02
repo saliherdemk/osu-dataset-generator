@@ -1,16 +1,20 @@
+import argparse
 import os
+import sys
 
 import numpy as np
 import pandas as pd
 import torch
 import torch.nn.functional as F
 import torchaudio
-from torch.utils.data import DataLoader, Dataset
+
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+
 
 from config import CHUNK_LENGTH_SEC, HOP_LENGTH, N_FFT, N_MELS, SR, STEP_LENGTH_SEC
 
 
-class BeatmapChunkDataset(Dataset):
+class ComputeMelClass:
     def __init__(self, input_folder):
         dtypes = {
             "id": "string",
@@ -27,10 +31,6 @@ class BeatmapChunkDataset(Dataset):
         )
         self.audio_folder = os.path.join(input_folder, "audio")
         self.chunks = self.get_chunks(input_folder)
-
-        self.audio_cache = {}
-        self.cache_order = []
-        self.max_cache_size = 100000
 
         self.mel_transform = torchaudio.transforms.MelSpectrogram(
             sample_rate=SR,
@@ -53,25 +53,6 @@ class BeatmapChunkDataset(Dataset):
         self.diff_ratings = dict(
             zip(self.input_df["id"], self.input_df["difficulty_rating"])
         )
-
-    def __len__(self):
-        return len(self.chunks)
-
-    def __getitem__(self, idx):
-        beatmap_id, chunk_start_sec, chunk_end_sec = self.chunks[idx]
-        beatmapset_id = beatmap_id.split("-")[0]
-        chunk_audio = self.get_audio_chunk(
-            beatmapset_id, chunk_start_sec, chunk_end_sec
-        )
-        hit_obj_data, diff_rating = self.get_chunk_data(
-            beatmap_id, chunk_start_sec, chunk_end_sec
-        )
-
-        chunk_audio = chunk_audio.clone().detach().float().unsqueeze(0)
-        diff_rating = torch.tensor(diff_rating, dtype=torch.float32).unsqueeze(0)
-        hit_obj_data = torch.tensor(hit_obj_data, dtype=torch.float32)
-
-        return chunk_audio, diff_rating, hit_obj_data
 
     def find_audio(self, beatmapset_id):
         # I hate everyone who has extention that is not .mp3 or .ogg.
@@ -118,11 +99,6 @@ class BeatmapChunkDataset(Dataset):
         return chunks
 
     def load_full_audio(self, beatmapset_id):
-        if beatmapset_id in self.audio_cache:
-            self.cache_order.remove(beatmapset_id)
-            self.cache_order.append(beatmapset_id)
-            return self.audio_cache[beatmapset_id]
-
         audio_path = self.find_audio(beatmapset_id)
         wf, sr = torchaudio.load(audio_path)
 
@@ -132,13 +108,6 @@ class BeatmapChunkDataset(Dataset):
             wf = self.resampler(wf)
 
         wf = torch.mean(wf, dim=0, keepdim=True)
-
-        if len(self.audio_cache) >= self.max_cache_size:
-            oldest = self.cache_order.pop(0)
-            del self.audio_cache[oldest]
-
-        self.audio_cache[beatmapset_id] = wf
-        self.cache_order.append(beatmapset_id)
 
         return wf
 
@@ -154,8 +123,6 @@ class BeatmapChunkDataset(Dataset):
         if chunk_audio.shape[1] < expected_samples:
             pad_size = expected_samples - chunk_audio.shape[1]
             chunk_audio = F.pad(chunk_audio, (0, pad_size))
-
-        # torchaudio.save("/kaggle/working/output.wav", chunk_audio, SR)
 
         mel_spectrogram = self.mel_transform(chunk_audio)
         log_mel_spectrogram = self.db_transform(mel_spectrogram)
@@ -232,110 +199,45 @@ class BeatmapChunkDataset(Dataset):
                 elif types[hit_idx] == "spinner":
                     result[idx, 5] = 1
 
-        # df = pd.DataFrame(result)
-        # df["start"] = frame_starts
-        # df["end"] = frame_ends
-
-        # df.to_csv("/kaggle/working/a.csv", index=False)
-        # print(beatmap_id, diff_rating, result)
-
         return result[:, :7], diff_rating
 
+    def save_mel(self, output_folder):
+        for b_data in self.chunks:
+            beatmap_id, chunk_start_sec, chunk_end_sec = b_data
+            beatmapset_id = beatmap_id.split("-")[0]
+            chunk_audio = self.get_audio_chunk(
+                beatmapset_id, chunk_start_sec, chunk_end_sec
+            )
+            hit_obj_data, diff_rating = self.get_chunk_data(
+                beatmap_id, chunk_start_sec, chunk_end_sec
+            )
 
-def createDataLoader(input_folder, batch_size):
-    dataset = BeatmapChunkDataset(input_folder)
+            chunk_audio = chunk_audio.clone().detach().float().unsqueeze(0)
+            diff_rating = torch.tensor(diff_rating, dtype=torch.float16).unsqueeze(0)
+            hit_obj_data = torch.tensor(hit_obj_data, dtype=torch.float16)
 
-    dataloader = DataLoader(
-        dataset,
-        batch_size=batch_size,
-        shuffle=True,
-        num_workers=4,
-        pin_memory=True,
-        prefetch_factor=4,
-        persistent_workers=True,
+            chunk_path = os.path.join(
+                output_folder, f"{beatmap_id}_{chunk_start_sec}_{chunk_end_sec}.npz"
+            )
+
+            np.savez_compressed(
+                chunk_path,
+                spectrogram=chunk_audio.numpy().astype(np.float16),
+                labels=hit_obj_data.numpy().astype(np.float16),
+                difficulty=diff_rating.numpy().astype(np.float16),
+            )
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--dataset_path", required=True, help="Path to dataset root folder."
     )
+    args = parser.parse_args()
 
-    return dataloader
-
-
-# Look for scipy binary dilation
-def prepare_audio_for_prediction(audio_path):
-    wf, sr = torchaudio.load(audio_path)
-
-    if sr != SR:
-        resampler = torchaudio.transforms.Resample(sr, SR)
-        wf = resampler(wf)
-
-    wf = torch.mean(wf, dim=0, keepdim=True)
-
-    info = torchaudio.info(audio_path)
-    total_samples = info.num_frames
-    sr = info.sample_rate
-    total_duration = total_samples / sr
-
-    chunks = []
-
-    mel_transform = torchaudio.transforms.MelSpectrogram(
-        sample_rate=SR,
-        n_fft=N_FFT,
-        hop_length=HOP_LENGTH,
-        n_mels=N_MELS,
-        center=False,
-        power=2.0,
-    )
-
-    db_transform = torchaudio.transforms.AmplitudeToDB(stype="power", top_db=80)
-
-    for chunk_start in np.arange(0, total_duration - CHUNK_LENGTH_SEC, STEP_LENGTH_SEC):
-        chunk_end = min(chunk_start + CHUNK_LENGTH_SEC, total_duration)
-
-        start_sample = int(chunk_start * SR)
-        end_sample = int(chunk_end * SR)
-
-        chunk_audio = wf[:, start_sample:end_sample]
-
-        expected_samples = int(SR * CHUNK_LENGTH_SEC)
-        if chunk_audio.shape[1] < expected_samples:
-            pad_size = expected_samples - chunk_audio.shape[1]
-            chunk_audio = F.pad(chunk_audio, (0, pad_size))
-
-        mel_spectrogram = mel_transform(chunk_audio)
-        log_mel_spectrogram = db_transform(mel_spectrogram)
-
-        audio_features = log_mel_spectrogram.squeeze(0).T
-        chunks.append(audio_features)
-
-    return torch.stack(chunks)
+    mel_class = ComputeMelClass(args.dataset_path)
+    mel_class.save_mel("/home/saliherdemk/try_dataset/precomputed/")
 
 
-def pred_to_df(probs):
-    columns = [
-        "start_ms",
-        "end_ms",
-        "is_circle",
-        "is_slider_start",
-        "is_slider_continue",
-        "is_slider_end",
-        "is_spinner_start",
-        "is_spinner_continue",
-        "is_spinner_end",
-    ]
-    rows = []
-
-    chunk_overlap_ms = STEP_LENGTH_SEC * 1000
-    num_frames = int(((CHUNK_LENGTH_SEC * SR) - N_FFT) / HOP_LENGTH) + 1
-    frame_ms = (CHUNK_LENGTH_SEC * 1000) / num_frames
-
-    num_chunks, num_frames, num_labels = probs.shape
-
-    for i in range(num_chunks):
-        chunk_start = i * chunk_overlap_ms
-        for j in range(num_frames):
-            start = float(chunk_start + j * frame_ms)
-            end = start + frame_ms
-            labels = probs[i, j].tolist()
-            rows.append([start, end] + labels)
-
-    df = pd.DataFrame(rows, columns=columns)
-
-    return df
+if __name__ == "__main__":
+    main()

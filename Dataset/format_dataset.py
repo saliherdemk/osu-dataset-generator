@@ -25,7 +25,6 @@ COL_TYPES = {
     "mapper_id": "int64",
     "beatmap_id": "int64",
     "duration": "int64",
-    "delta_time": "int64",
 }
 
 
@@ -124,10 +123,11 @@ class Formatter:
         return pd.DataFrame(results)
 
     def process_group(self, beatmap_data):
-        timing_data = [
-            self.extract_timing_attributes(group)
-            for _, group in beatmap_data.groupby("id")
-        ]
+        timing_data = []
+
+        for _, group in beatmap_data.groupby("id"):
+            res_df = self.extract_timing_attributes(group)
+            timing_data.append(res_df)
         timing_df = pd.concat(timing_data, ignore_index=True)
 
         beatmap_data = pd.concat(
@@ -148,13 +148,6 @@ class Formatter:
             beatmap_data.loc[mask_spinner, "spinner_time"]
             - beatmap_data.loc[mask_spinner, "time"]
         ).astype(int)
-
-        beatmap_data["delta_time"] = (
-            beatmap_data.groupby("id")["time"]
-            .diff()
-            .fillna(beatmap_data["time"])
-            .astype(int)
-        )
 
         beatmap_data.drop(columns="length", inplace=True)
         beatmap_data = beatmap_data[COL_TYPES.keys()].astype(COL_TYPES)
