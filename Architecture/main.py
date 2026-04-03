@@ -17,6 +17,7 @@ from Architecture.Dataset import (
 
 
 def save_model(epoch, model, optimizer, scheduler, save_to):
+    os.makedirs(save_to, exist_ok=True)
     torch.save(
         {
             "epoch": epoch,
@@ -45,15 +46,13 @@ def train(
 
     kwargs = {"alpha": 0.25, "gamma": 2.0, "reduction": "mean"}
 
-    start_epoch = 0
-
     writer = SummaryWriter(log_dir=log_dir) if log_dir else None
 
     for epoch in tqdm(range(start_epoch, num_epochs)):
         model.train()
         train_epoch_loss = 0.0
 
-        for batch_idx, data in enumerate(train_dataloader):
+        for batch_idx, data in enumerate(tqdm(train_dataloader, desc=f"Epoch {epoch+1}/{num_epochs}", leave=False)):
             chunk_audio, diff_rating, hit_obj_data = data
 
             chunk_audio = chunk_audio.to(device)
@@ -78,7 +77,7 @@ def train(
         if writer:
             writer.add_scalar("Loss/train", avg_train_loss, epoch)
 
-        if epoch % 200 == 0:
+        if epoch % 20 == 0:
             save_model(epoch, model, optimizer, scheduler, save_to)
 
         if not eval_dataloader:
@@ -121,6 +120,8 @@ def train(
             if writer:
                 writer.add_scalar("F1/val", f1, epoch)
 
+    save_model(num_epochs - 1, model, optimizer, scheduler, save_to)
+
 
 def predict_audio(model, audio_path, save_to, diff_rating, device):
     model.eval()
@@ -140,7 +141,7 @@ def main():
     parser.add_argument("--train_dataset_folder", default=None)
     parser.add_argument("--eval_dataset_folder", default=None)
     parser.add_argument("--batch_size", default=4, type=int)
-    parser.add_argument("--num_epochs", default=10, type=int)
+    parser.add_argument("--num_epochs", default=100, type=int)
     parser.add_argument("--load_from", default=None)
     parser.add_argument("--save_to", default=None)
     parser.add_argument("--mode", default="train", choices=["train", "predict"])

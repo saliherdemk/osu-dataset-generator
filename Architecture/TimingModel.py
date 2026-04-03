@@ -64,7 +64,7 @@ class AudioEncoder(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, input_size=2048 + 64, rnn_hidden_size=256, rnn_layers=2):
+    def __init__(self, input_size, rnn_hidden_size=256, rnn_layers=2):
         super().__init__()
 
         self.gru = nn.GRU(
@@ -117,9 +117,8 @@ class TimingModel(nn.Module):
         return final_output
 
     def predict(self, chunks, diff_rating):
-        diff_rating = torch.tensor([diff_rating], dtype=torch.float32)
         diff_rating = torch.full(
-            (chunks.shape[0], 1), diff_rating.item(), dtype=torch.float32
+            (chunks.shape[0], 1), diff_rating, dtype=torch.float32, device=chunks.device
         )
         with torch.no_grad():
             output = self.forward(chunks, diff_rating)

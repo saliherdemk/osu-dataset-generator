@@ -1,15 +1,18 @@
 import argparse
 import os
 import sys
+from collections import defaultdict
 
+import librosa
+import mutagen
 import numpy as np
 import pandas as pd
 import torch
 import torch.nn.functional as F
 import torchaudio
+from tqdm import tqdm
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-
 
 from config import CHUNK_LENGTH_SEC, HOP_LENGTH, N_FFT, N_MELS, SR, STEP_LENGTH_SEC
 
@@ -45,8 +48,6 @@ class ComputeMelClass:
             stype="power", top_db=80
         )
 
-        self.resampler = None
-
         self.grouped_data = {
             beatmap_id: group for beatmap_id, group in self.input_df.groupby("id")
         }
@@ -55,8 +56,6 @@ class ComputeMelClass:
         )
 
     def find_audio(self, beatmapset_id):
-        # I hate everyone who has extention that is not .mp3 or .ogg.
-        # Special hate for https://osu.ppy.sh/beatmapsets/1855918#osu/3814170 who named audio extension as .727.
         extensions = ["", ".Mp3", ".ogg", ".MP3", ".OGG", ".mp3", ".727"]
         paths = [
             os.path.join(self.audio_folder, str(beatmapset_id) + e) for e in extensions
@@ -68,25 +67,25 @@ class ComputeMelClass:
 
         raise FileNotFoundError
 
+    def get_audio_duration(self, audio_path):
+        audio = mutagen.File(audio_path)
+        if audio is not None and audio.info is not None:
+            return audio.info.length, int(audio.info.sample_rate)
+
+        wf, sr = torchaudio.load(audio_path)
+        return wf.shape[1] / sr, sr
+
     def get_chunks(self, input_folder):
-        chunks_file = os.path.join(input_folder, "chunks.csv")
-        if os.path.exists(chunks_file):
-            print("Loading cached chunk metadata...")
-            df = pd.read_csv(chunks_file)
-            return [
-                (row.id, float(row.start), float(row.end))
-                for row in df.itertuples(index=False)
-            ]
-
         chunks = []
-        for beatmap_id in self.input_df["id"].unique():
+        unique_ids = self.input_df["id"].unique()
+        for beatmap_id in tqdm(unique_ids, desc="Building chunk index"):
             beatmapset_id = beatmap_id.split("-")[0]
-            audio_path = self.find_audio(beatmapset_id)
-
-            info = torchaudio.info(audio_path)
-            total_samples = info.num_frames
-            sr = info.sample_rate
-            total_duration = total_samples / sr
+            try:
+                audio_path = self.find_audio(beatmapset_id)
+                total_duration, _ = self.get_audio_duration(audio_path)
+            except Exception as e:
+                print(f"Skipping {beatmapset_id} (chunk index): {e}")
+                continue
 
             for start in np.arange(
                 0, total_duration - CHUNK_LENGTH_SEC, STEP_LENGTH_SEC
@@ -94,26 +93,14 @@ class ComputeMelClass:
                 end = min(start + CHUNK_LENGTH_SEC, total_duration)
                 chunks.append((beatmap_id, start, end))
 
-        chunks_df = pd.DataFrame(chunks, columns=["id", "start", "end"])
-        chunks_df.to_csv(chunks_file, index=False)
         return chunks
 
     def load_full_audio(self, beatmapset_id):
         audio_path = self.find_audio(beatmapset_id)
-        wf, sr = torchaudio.load(audio_path)
+        wf, _ = librosa.load(audio_path, sr=SR, mono=True)
+        return torch.from_numpy(wf).unsqueeze(0)
 
-        if sr != SR:
-            if self.resampler is None or self.resampler.orig_freq != sr:
-                self.resampler = torchaudio.transforms.Resample(sr, SR)
-            wf = self.resampler(wf)
-
-        wf = torch.mean(wf, dim=0, keepdim=True)
-
-        return wf
-
-    def get_audio_chunk(self, beatmapset_id, chunk_start, chunk_end):
-        full_audio = self.load_full_audio(beatmapset_id)
-
+    def get_audio_chunk(self, full_audio, chunk_start, chunk_end):
         start_sample = int(chunk_start * SR)
         end_sample = int(chunk_end * SR)
 
@@ -127,9 +114,7 @@ class ComputeMelClass:
         mel_spectrogram = self.mel_transform(chunk_audio)
         log_mel_spectrogram = self.db_transform(mel_spectrogram)
 
-        audio_features = log_mel_spectrogram.squeeze(0).T
-
-        return audio_features
+        return log_mel_spectrogram.squeeze(0).T
 
     def get_chunk_data(self, beatmap_id, chunk_start_sec, chunk_end_sec):
         chunk_start = chunk_start_sec * 1000
@@ -202,30 +187,48 @@ class ComputeMelClass:
         return result[:, :7], diff_rating
 
     def save_mel(self, output_folder):
-        for b_data in self.chunks:
-            beatmap_id, chunk_start_sec, chunk_end_sec = b_data
+        os.makedirs(output_folder, exist_ok=True)
+
+        chunks_by_beatmapset = defaultdict(list)
+        for beatmap_id, chunk_start_sec, chunk_end_sec in self.chunks:
             beatmapset_id = beatmap_id.split("-")[0]
-            chunk_audio = self.get_audio_chunk(
-                beatmapset_id, chunk_start_sec, chunk_end_sec
-            )
-            hit_obj_data, diff_rating = self.get_chunk_data(
-                beatmap_id, chunk_start_sec, chunk_end_sec
+            chunks_by_beatmapset[beatmapset_id].append(
+                (beatmap_id, chunk_start_sec, chunk_end_sec)
             )
 
-            chunk_audio = chunk_audio.clone().detach().float().unsqueeze(0)
-            diff_rating = torch.tensor(diff_rating, dtype=torch.float16).unsqueeze(0)
-            hit_obj_data = torch.tensor(hit_obj_data, dtype=torch.float16)
+        for beatmapset_id, beatmapset_chunks in tqdm(
+            chunks_by_beatmapset.items(), desc="Processing"
+        ):
+            try:
+                full_audio = self.load_full_audio(beatmapset_id)
+            except Exception as e:
+                print(f"Skipping {beatmapset_id} (load audio): {e}")
+                continue
 
-            chunk_path = os.path.join(
-                output_folder, f"{beatmap_id}_{chunk_start_sec}_{chunk_end_sec}.npz"
-            )
+            for beatmap_id, chunk_start_sec, chunk_end_sec in beatmapset_chunks:
+                chunk_audio = self.get_audio_chunk(
+                    full_audio, chunk_start_sec, chunk_end_sec
+                )
+                hit_obj_data, diff_rating = self.get_chunk_data(
+                    beatmap_id, chunk_start_sec, chunk_end_sec
+                )
 
-            np.savez_compressed(
-                chunk_path,
-                spectrogram=chunk_audio.numpy().astype(np.float16),
-                labels=hit_obj_data.numpy().astype(np.float16),
-                difficulty=diff_rating.numpy().astype(np.float16),
-            )
+                chunk_audio = chunk_audio.clone().detach().float().unsqueeze(0)
+                diff_rating = torch.tensor(diff_rating, dtype=torch.float16).unsqueeze(
+                    0
+                )
+                hit_obj_data = torch.tensor(hit_obj_data, dtype=torch.float16)
+
+                chunk_path = os.path.join(
+                    output_folder, f"{beatmap_id}_{chunk_start_sec}_{chunk_end_sec}.npz"
+                )
+
+                np.savez_compressed(
+                    chunk_path,
+                    spectrogram=chunk_audio.numpy().astype(np.float16),
+                    labels=hit_obj_data.numpy().astype(np.float16),
+                    difficulty=diff_rating.numpy().astype(np.float16),
+                )
 
 
 def main():
@@ -236,7 +239,7 @@ def main():
     args = parser.parse_args()
 
     mel_class = ComputeMelClass(args.dataset_path)
-    mel_class.save_mel("/home/saliherdemk/try_dataset/precomputed/")
+    mel_class.save_mel(os.path.join(args.dataset_path, "precomputed"))
 
 
 if __name__ == "__main__":
